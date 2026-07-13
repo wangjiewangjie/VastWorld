@@ -1,6 +1,3 @@
-// 规则自动更新间隔（天）
-var uptime = 2;
-
 var RULE_JS_BASE = 'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/hikermovie.js';
 var RULE_JSON_BASE = 'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/hikermovie.json';
 var RULE_DIR = 'hiker://files/rules/xyq/';
@@ -48,7 +45,7 @@ function getRemoteMeta() {
 }
 
 function needsUpdate() {
-    if (!fileExist(RULE_DIR + 'hikerupdate.txt') || !fileExist(RULE_DIR + 'hikermovie.js') || !fileExist(RULE_DIR + 'hikermovie.json')) {
+    if (!fileExist(RULE_DIR + 'hikermovie.js') || !fileExist(RULE_DIR + 'hikermovie.json')) {
         return true;
     }
     var local = getLocalMeta();
@@ -59,23 +56,7 @@ function needsUpdate() {
     if (remote.build && local.build && remote.build != local.build) {
         return true;
     }
-    var remoteJs = fetchRule(ruleUrl(RULE_JS_BASE), function(content) {
-        return content.search(/lazyRule/) != -1;
-    });
-    var localJs = fetch(RULE_DIR + 'hikermovie.js', {});
-    if (remoteJs && localJs && remoteJs.length != localJs.length) {
-        return true;
-    }
-    var last = fetch(RULE_DIR + 'hikerupdate.txt', {});
-    var lastTime = parseInt(last);
-    if (isNaN(lastTime)) {
-        lastTime = new Date(last).getTime();
-    }
-    if (isNaN(lastTime)) {
-        return true;
-    }
-    var days = (Date.now() - lastTime) / (1000 * 3600 * 24);
-    return days >= uptime || days < 0;
+    return false;
 }
 
 function uprulefile(showTip, force) {
@@ -101,7 +82,6 @@ function uprulefile(showTip, force) {
         writeFile(RULE_DIR + 'hikermovie.json', rulejson);
     }
     if (jsOk && jsonOk) {
-        writeFile(RULE_DIR + 'hikerupdate.txt', Date.now() + '');
         return true;
     }
     if (showTip) {
