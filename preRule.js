@@ -1,0 +1,131 @@
+// 规则自动更新间隔（天）
+var uptime = 2;
+
+var RULE_JS_BASE = 'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/hikermovie.js';
+var RULE_JSON_BASE = 'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/hikermovie.json';
+var RULE_DIR = 'hiker://files/rules/xyq/';
+var FETCH_OPT = {
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+    }
+};
+
+function ruleUrl(base) {
+    return base + '?t=' + Date.now();
+}
+
+function fetchRule(url, check) {
+    try {
+        var content = fetch(url, FETCH_OPT);
+        if (content && content.substring(0, 5) != 'error' && check(content)) {
+            return content;
+        }
+    } catch (e) {}
+    return '';
+}
+
+function getLocalMeta() {
+    try {
+        if (!fileExist(RULE_DIR + 'hikermovie.json')) {
+            return {};
+        }
+        return JSON.parse(fetch(RULE_DIR + 'hikermovie.json', {}));
+    } catch (e) {
+        return {};
+    }
+}
+
+function getRemoteMeta() {
+    try {
+        return JSON.parse(fetchRule(ruleUrl(RULE_JSON_BASE), function(content) {
+            return content.search(/\"vodhref\"/) != -1;
+        }));
+    } catch (e) {
+        return {};
+    }
+}
+
+function needsUpdate() {
+    if (!fileExist(RULE_DIR + 'hikerupdate.txt') || !fileExist(RULE_DIR + 'hikermovie.js') || !fileExist(RULE_DIR + 'hikermovie.json')) {
+        return true;
+    }
+    var local = getLocalMeta();
+    var remote = getRemoteMeta();
+    if (remote.version && local.version && remote.version != local.version) {
+        return true;
+    }
+    if (remote.build && local.build && remote.build != local.build) {
+        return true;
+    }
+    var remoteJs = fetchRule(ruleUrl(RULE_JS_BASE), function(content) {
+        return content.search(/lazyRule/) != -1;
+    });
+    var localJs = fetch(RULE_DIR + 'hikermovie.js', {});
+    if (remoteJs && localJs && remoteJs.length != localJs.length) {
+        return true;
+    }
+    var last = fetch(RULE_DIR + 'hikerupdate.txt', {});
+    var lastTime = parseInt(last);
+    if (isNaN(lastTime)) {
+        lastTime = new Date(last).getTime();
+    }
+    if (isNaN(lastTime)) {
+        return true;
+    }
+    var days = (Date.now() - lastTime) / (1000 * 3600 * 24);
+    return days >= uptime || days < 0;
+}
+
+function uprulefile(showTip, force) {
+    if (force == null) {
+        force = false;
+    }
+    if (!force && !needsUpdate()) {
+        return true;
+    }
+    var rulejs = fetchRule(ruleUrl(RULE_JS_BASE), function(content) {
+        return content.search(/lazyRule/) != -1;
+    });
+    var rulejson = fetchRule(ruleUrl(RULE_JSON_BASE), function(content) {
+        return content.search(/\"vodhref\"/) != -1;
+    });
+    var jsOk = rulejs != '';
+    var jsonOk = rulejson != '';
+
+    if (jsOk) {
+        writeFile(RULE_DIR + 'hikermovie.js', rulejs);
+    }
+    if (jsonOk) {
+        writeFile(RULE_DIR + 'hikermovie.json', rulejson);
+    }
+    if (jsOk && jsonOk) {
+        writeFile(RULE_DIR + 'hikerupdate.txt', Date.now() + '');
+        return true;
+    }
+    if (showTip) {
+        confirm({ title: '更新失败', content: 'GitHub 规则拉取失败，请检查网络' });
+    }
+    return false;
+}
+
+function loadRules() {
+    var lac = fetch(RULE_DIR + 'hikermovie.js');
+    if (lac.search(/lazyRule/) != -1) {
+        eval(lac);
+        hikerpre();
+        return true;
+    }
+    return false;
+}
+
+if (needsUpdate()) {
+    uprulefile(false, true);
+}
+if (!loadRules()) {
+    uprulefile(true, true);
+    if (!loadRules()) {
+        setError('本地规则加载失败，请检查网络后重试');
+    }
+}
