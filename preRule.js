@@ -53,9 +53,6 @@ function needsUpdate() {
     if (remote.version && local.version && remote.version != local.version) {
         return true;
     }
-    if (remote.build && local.build && remote.build != local.build) {
-        return true;
-    }
     return false;
 }
 
