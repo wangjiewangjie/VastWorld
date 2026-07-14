@@ -1732,14 +1732,6 @@ function omlazy() {
                                         return urls[i] + ';{Referer@https://www.bilibili.com&&User-Agent@Mozilla/5.0}';
                                     } else if (urls[i].indexOf('titan.mgtv.com') != -1) {
                                         return urls[i] + '#isVideo=true#' + ';{Referer@www.mgtv.com&&User-Agent@Mozilla/5.0}';
-                                    } else if (urls[i].indexOf('juhaokan') != -1) {
-                                        return urls[i] + ';{Referer@https://www.juhaokan.cc/}';
-                                    } else if (urls[i].indexOf('ojbk') != -1) {
-                                        return urls[i] + ';{Referer@https://v.ojbkjx.com/}';
-                                    } else if (urls[i].indexOf('wkfile') != -1) {
-                                        return urls[i] + ';{Referer@https://fantuan.wkfile.com/}';
-                                    } else if (urls[i].indexOf('shenglinyiyang') != -1) {
-                                        return urls[i] + ';{Referer@https://zyz.sdljwomen.com/}';
                                     } else {
                                         return urls[i] + '#isVideo=true#'
                                     }
@@ -1794,14 +1786,7 @@ function omlazy() {
             else if (/qkan8/.test(myurl)) {
                 if (urll.indexOf('http') != -1) {
                     if (urll.indexOf('html') != -1) {
-                        var html = fetch('https://www.cuan.la/m3u8.php?url=' + urll, {
-                            headers: {
-                                "User-Agent": MOBILE_UA,
-                                "Referer": "https://qkan8.com/"
-                            }
-                        });
-                        eval(fetch('https://cdn.jsdelivr.net/gh/lzk23559/Public_folder/token.js', {}));
-                        return playUrl(tkurl.indexOf('url=') > -1 ? tkurl.split('url=')[1] : tkurl);
+                        return x5rule(urll, srcurl);
                     } else {
                         return playUrl(urll + '#isVideo=true#')
                     };
@@ -1824,14 +1809,10 @@ function omlazy() {
         else if (/saohuo|shdy3|shdy2|dm84/.test(myurl)) {
             var phtml = request(srcurl);
             var src = pd(phtml, "body&&iframe&&src");
-            if (/api\.hhplayer/.test(src)) {
-                var psurl = 'https://api.hhplayer.com/api.php';
-            } else if (/hkjx\.hhplayer/.test(src)) {
-                var psurl = 'https://hkjx.hhplayer.com/api.php';
-            } else if (/hhjx\.hhplayer/.test(src)) {
+            if (/api\.hhplayer|hkjx\.hhplayer|hhjx\.hhplayer/.test(src)) {
                 var psurl = 'https://hhjx.hhplayer.com/api.php';
             } else if (/play\.hhplayer/.test(src)) {
-                var psurl = 'https://play.hhplayer.com/hhjx/api.php'
+                var psurl = 'https://play.hhplayer.com/api.php'
             }
             var cc = 'function OKOK'+pdfh(request(src, {}), 'body&&script,0&&Html').split('var act')[0].split('function OKOK')[1];
             cc = cc.replace('atob', 'base64Decode').replace(/const/g, 'let');
@@ -1849,7 +1830,7 @@ function omlazy() {
             if (/obj\/tos/.test(playlink)) {
                 return playUrl(playlink + '#isVideo=true#');
             } else {
-                return playUrl((playlink.indexOf('http') != -1 ? playlink : 'https://api.hhplayer.com' + playlink) + '#isVideo=true#')
+                return playUrl((playlink.indexOf('http') != -1 ? playlink : 'https://hhjx.hhplayer.com' + playlink) + '#isVideo=true#')
             }
         }
         else if (/viptv/.test(myurl)) {
