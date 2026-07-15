@@ -639,6 +639,105 @@ function clsrule() {
 
 }
 
+// Omofun 搜索安全验证：从验证页取出 refresh() token，提交后拿到可搜索 cookie
+function omofunaPassVerify(dom, searchUrl) {
+    try {
+        var probe = searchUrl || (dom + '/search/a----------1---.html');
+        var baseOpt = {
+            headers: {
+                'User-Agent': MOBILE_UA,
+                'Referer': dom + '/'
+            },
+            timeout: 10000
+        };
+        fetch(dom + '/', baseOpt);
+        var vhtml = fetch(probe, baseOpt);
+        var cok = '';
+        try {
+            cok = getCookie(dom) || getCookie(probe) || '';
+        } catch (e) {}
+        if (!/系统安全验证|因访问过多|继续访问|function\s+refresh/.test(vhtml)) {
+            return cok;
+        }
+        var scripts = vhtml.match(/<script>([\s\S]*?)<\/script>/g);
+        if (!scripts || !scripts.length) return '';
+        var code = scripts[scripts.length - 1].replace(/<\/?script>/gi, '');
+        if (code.indexOf('refresh') < 0) return '';
+        var token = '';
+        (function () {
+            var $ = function (x) {
+                if (typeof x == 'function') {
+                    try {
+                        x();
+                    } catch (e) {}
+                    return $;
+                }
+                return {
+                    focus: function () {
+                        return this;
+                    },
+                    bind: function () {
+                        return this;
+                    },
+                    click: function () {
+                        return this;
+                    },
+                    val: function () {
+                        return '';
+                    }
+                };
+            };
+            var MAC = {
+                Ajax: function () {},
+                Verify: {
+                    Refresh: function () {}
+                }
+            };
+            var maccms = {
+                path: ''
+            };
+            eval(code);
+            if (typeof refresh == 'function') {
+                token = refresh();
+            }
+        })();
+        if (!token) return '';
+        try {
+            cok = getCookie(dom) || getCookie(probe) || cok;
+        } catch (e) {}
+        var r = fetch(dom + '/index.php/ajax/verify_check?type=search', {
+            headers: {
+                'User-Agent': MOBILE_UA,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Referer': probe,
+                'Cookie': cok,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'i=' + encodeURIComponent(token),
+            method: 'POST',
+            timeout: 10000
+        });
+        try {
+            var j = typeof r == 'string' ? JSON.parse(r) : r;
+            if (!j || j.code != 1) return '';
+        } catch (e) {
+            if (!(r && (r + '').indexOf('"code":1') >= 0)) return '';
+        }
+        try {
+            cok = getCookie(dom) || getCookie(probe) || cok;
+        } catch (e) {}
+        if (cok && cok.indexOf('searchneed') < 0) {
+            cok = 'searchneed=ok; ' + cok;
+        }
+        return cok || 'searchneed=ok';
+    } catch (e) {
+        try {
+            log('omofunaPassVerify:' + e.message);
+        } catch (e2) {}
+        return '';
+    }
+}
+
 function hiksearch() {
     var urlph = $.toString(() => {
         if (/dm84/.test(url)) {
@@ -650,7 +749,7 @@ function hiksearch() {
         } else if (/qkan8/.test(url)) {
             url = url + '/index.php/vod/search/page/fypage/wd/' + spl[2] + '.html';
         } else if (/omofuna/.test(url)) {
-            url = url + '/search/' + spl[2] + '----------fypage.html';
+            url = url + '/search/' + spl[2] + '----------fypage---.html';
         } else if (/auete/.test(url)) {
             url = url + '/auete4so.php?searchword=' + spl[2];
         } else if (/wwgz/.test(url)) {
@@ -666,6 +765,7 @@ function hiksearch() {
         d.push({
             title: '点击开始聚合搜索：' + spl[2],
             url: $('hiker://empty#noHistory#$$$hiker://files/rules/xyq/hikermovie.js$$$' + spl[2] + '$$$fypage').rule((list, urlph) => {
+                eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
                 var items = [];
                 var spl = MY_URL.split('$$$');
                 var ssxc = 5;
@@ -694,7 +794,24 @@ function hiksearch() {
                                             timeout: tout
                                         }
                                     });
-                                } else if (/viptv|saohuo|shdy3|shdy2|dm84|omofuna/.test(Url)) {
+                                } else if (/omofuna/.test(Url)) {
+                                    var omdomin = Url.match(/([\S]*?:\/\/[\S]*?)\//)[1];
+                                    var omock = omofunaPassVerify(omdomin, Url);
+                                    if (omock) {
+                                        writeFile('hiker://files/rules/xyq/xqyscookie/' + title + 'cookie.txt', omock);
+                                    }
+                                    Data.push({
+                                        url: Url,
+                                        options: {
+                                            headers: {
+                                                "User-Agent": MOBILE_UA,
+                                                "Referer": omdomin + '/',
+                                                "Cookie": omock || fetch("hiker://files/rules/xyq/xqyscookie/" + title + "cookie.txt", {})
+                                            },
+                                            timeout: 10000
+                                        }
+                                    });
+                                } else if (/viptv|saohuo|shdy3|shdy2|dm84/.test(Url)) {
                                     Data.push({
                                         url: Url,
                                         options: {
@@ -764,6 +881,33 @@ function hiksearch() {
                                                 "User-Agent": MOBILE_UA
                                             }
                                         });
+                                    } else if (/omofuna/.test(param.it.url) && html.search(/系统安全验证|因访问过多|继续访问/) != -1) {
+                                        var omdomin = param.it.url.match(/([\S]*?:\/\/[\S]*?)\//)[1];
+                                        var omock = omofunaPassVerify(omdomin, param.it.url);
+                                        if (omock) {
+                                            writeFile('hiker://files/rules/xyq/xqyscookie/' + param.tit.tit + 'cookie.txt', omock);
+                                            html = fetch(param.it.url, {
+                                                headers: {
+                                                    "User-Agent": MOBILE_UA,
+                                                    "Referer": omdomin + '/',
+                                                    "Cookie": omock
+                                                },
+                                                timeout: 10000
+                                            });
+                                        }
+                                        if (html.search(/系统安全验证|因访问过多|继续访问/) != -1) {
+                                            d.push({
+                                                title: param.tit.tit + ' 搜索验证失败，点击查看原站',
+                                                url: param.it.url,
+                                                desc: "",
+                                                pic_url: "",
+                                                col_type: 'text_1'
+                                            });
+                                        } else {
+                                            var spl = omdomin;
+                                            eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                                            ssjiex();
+                                        }
                                     } else if (html.search(/请输入验证码|首次搜索需要输入验证码|此数据需要输入验证码|验证后查看搜索结果|访问此数据需要输入验|正确的验证码继续访问|需要先输入验证码/) != -1 && !/wwgz/.test(param.it.url)) {
                                         if (html.search(/验证后查看搜索结果/) != -1) {
                                             d.push({
@@ -1197,6 +1341,22 @@ function hikseaerji() {
     };
 
     var spl = MY_URL.match(/([\S]*?:\/\/[\S]*?)\//)[1];
+    // Omofun 搜索需先过安全验证，否则只会拿到验证页
+    if (/omofuna/.test(spl) && html.search(/系统安全验证|因访问过多|继续访问/) != -1) {
+        var ckt = typeof cktitle != 'undefined' ? cktitle : 'Omofun动漫';
+        var omock = omofunaPassVerify(spl, MY_URL);
+        if (omock) {
+            writeFile('hiker://files/rules/xyq/xqyscookie/' + ckt + 'cookie.txt', omock);
+            html = fetch(MY_URL, {
+                headers: {
+                    "User-Agent": MOBILE_UA,
+                    "Referer": spl + '/',
+                    "Cookie": omock
+                },
+                timeout: 10000
+            });
+        }
+    }
     if (html.indexOf('人机身份验证，请完成以下操作') > -1 || html.indexOf('人机识别，请稍等') > -1) {
         eval(getItem('huadong').replace(/refre/g, spl));
         var html = fetch(MY_URL, {
