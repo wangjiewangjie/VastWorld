@@ -32,6 +32,54 @@
         }),
         col_type: 'flex_button'
     });
+    d.push({
+        title: '更新规则',
+        url: $("#noLoading#").lazyRule(() => {
+            var bases = [
+                'https://cdn.jsdelivr.net/gh/wangjiewangjie/VastWorld@main/',
+                'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
+                'https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/'
+            ];
+            var dir = 'hiker://files/rules/xyq/';
+            var opt = {
+                headers: {
+                    'User-Agent': MOBILE_UA,
+                    'Cache-Control': 'no-cache',
+                    Pragma: 'no-cache'
+                },
+                timeout: 20000
+            };
+            function pull(url, check) {
+                try {
+                    var content = fetch(url + '?t=' + Date.now(), opt);
+                    if (content && content.substring(0, 5) != 'error' && check(content)) {
+                        return content;
+                    }
+                } catch (e) {}
+                return '';
+            }
+            for (var i = 0; i < bases.length; i++) {
+                var rulejs = pull(bases[i] + 'hikermovie.js', function (c) {
+                    return c.search(/lazyRule/) != -1;
+                });
+                var rulejson = pull(bases[i] + 'hikermovie.json', function (c) {
+                    return c.search(/\"vodhref\"/) != -1;
+                });
+                if (rulejs && rulejson) {
+                    writeFile(dir + 'hikermovie.js', rulejs);
+                    writeFile(dir + 'hikermovie.json', rulejson);
+                    try {
+                        eval(rulejs);
+                        if (typeof hikerpre == 'function') hikerpre();
+                    } catch (e) {}
+                    refreshPage(false);
+                    return 'toast://更新成功';
+                }
+            }
+            return 'toast://更新失败，请检查网络或代理';
+        }),
+        col_type: 'flex_button'
+    });
     for (var i = 0; i < json.data.length; i++) {
         var tab = json.data[i];
         for (var k = 0; k < tab.list.length; k++) {
