@@ -32,44 +32,6 @@
         }),
         col_type: 'flex_button'
     });
-    d.push({
-        title: '更新规则',
-        url: $("#noLoading#").lazyRule(() => {
-            var jsBase = 'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/hikermovie.js';
-            var jsonBase = 'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/hikermovie.json';
-            var dir = 'hiker://files/rules/xyq/';
-            var opt = {
-                headers: {
-                    'User-Agent': MOBILE_UA,
-                    'Cache-Control': 'no-cache',
-                    Pragma: 'no-cache'
-                }
-            };
-            function pull(url, check) {
-                try {
-                    var content = fetch(url + '?t=' + Date.now(), opt);
-                    if (content && content.substring(0, 5) != 'error' && check(content)) {
-                        return content;
-                    }
-                } catch (e) {}
-                return '';
-            }
-            var rulejs = pull(jsBase, function (c) {
-                return c.search(/lazyRule/) != -1;
-            });
-            var rulejson = pull(jsonBase, function (c) {
-                return c.search(/\"vodhref\"/) != -1;
-            });
-            if (rulejs) writeFile(dir + 'hikermovie.js', rulejs);
-            if (rulejson) writeFile(dir + 'hikermovie.json', rulejson);
-            if (rulejs && rulejson) {
-                refreshPage(false);
-                return 'toast://更新成功，请返回重新进入规则以加载最新脚本';
-            }
-            return 'toast://更新失败，请检查网络';
-        }),
-        col_type: 'flex_button'
-    });
     for (var i = 0; i < json.data.length; i++) {
         var tab = json.data[i];
         for (var k = 0; k < tab.list.length; k++) {
