@@ -786,6 +786,127 @@ function omofunaPassVerify(dom, searchUrl) {
     }
 }
 
+// 农民影视站内搜索模板已失效（页面写明升级中），用分类页+RSS 按关键词筛选；须移动 UA
+function wwgzFillSearch(d, dom, wd, page, siteTitle) {
+    siteTitle = siteTitle || '';
+    page = parseInt(page, 10) || 1;
+    if (!wd) {
+        d.push({
+            title: (siteTitle ? siteTitle + ' ' : '') + '请输入关键词',
+            col_type: 'text_1'
+        });
+        return;
+    }
+    var seen = {};
+    var hit = 0;
+    var opt = {
+        headers: {
+            'User-Agent': MOBILE_UA,
+            'Referer': dom + '/'
+        },
+        timeout: 10000
+    };
+
+    function pushOne(title, url, img, desc) {
+        if (!title || title.indexOf(wd) < 0) return;
+        if (!url) return;
+        url = url.replace(/^http:\/\/vip\.wwgz\.cn:5200/i, dom).replace(/^http:\/\/vip\.wwgz\.cn/i, dom);
+        if (url.substring(0, 4) != 'http') url = dom + url;
+        if (seen[url]) return;
+        seen[url] = 1;
+        hit++;
+        var tup = '';
+        if (img) {
+            if (img.substring(0, 4) != 'http') img = dom + img;
+            tup = img + '@Referer=' + dom;
+        }
+        d.push({
+            title: siteTitle ? (title.replace(wd, '「' + wd + '」') + '\n' + siteTitle) : (title + (desc ? ' ' + desc : '')),
+            pic_url: tup,
+            desc: siteTitle ? '' : (desc || ' '),
+            url: $(url).rule((MOVtitle) => {
+                eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                omerj();
+            }, title),
+            col_type: tup ? 'movie_1_vertical_pic' : 'text_1'
+        });
+    }
+
+    var rssPages = page == 1 ? [1, 2, 3, 4, 5, 6, 8, 10] : [page, page + 1, page + 2];
+    for (var ri = 0; ri < rssPages.length; ri++) {
+        try {
+            var rss = fetch(dom + '/map-rss-pg-' + rssPages[ri] + '.html', opt);
+            if (!rss || rss.indexOf('<item>') < 0) continue;
+            var items = rss.match(/<item>[\s\S]*?<\/item>/g) || [];
+            for (var j = 0; j < items.length; j++) {
+                var it = items[j];
+                var title = '';
+                var tm = it.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+                if (tm) title = tm[1];
+                else {
+                    tm = it.match(/<title>([\s\S]*?)<\/title>/);
+                    if (tm) title = tm[1];
+                }
+                var link = '';
+                var lm = it.match(/<link>([\s\S]*?)<\/link>/);
+                if (lm) link = lm[1].replace(/\s+/g, '');
+                pushOne(title, link, '', '');
+            }
+        } catch (e) {}
+    }
+
+    var types = [1, 2, 3, 4, 26];
+    for (var ti = 0; ti < types.length; ti++) {
+        try {
+            var html = fetch(dom + '/vod-type-id-' + types[ti] + '-pg-' + page + '.html', opt);
+            if (!html || html.length < 800 || /404/.test(html.substring(0, 200))) continue;
+            var list = [];
+            try {
+                if (/globalPicList/.test(html)) {
+                    list = pdfa(html, 'body&&.globalPicList&&li');
+                } else if (/#data_list/.test(html) || /id=\"data_list\"/.test(html)) {
+                    list = pdfa(html, 'body&&#data_list&&li');
+                } else {
+                    list = pdfa(html, 'body&&li:has(a)');
+                }
+            } catch (e) {}
+            for (var i = 0; i < list.length; i++) {
+                var title = '';
+                try {
+                    title = pdfh(list[i], 'a[title]&&title') || pdfh(list[i], '.sTit&&Text') || pdfh(list[i], 'a&&Text');
+                } catch (e) {}
+                var url = '';
+                try {
+                    url = pd(list[i], 'a&&href');
+                } catch (e) {}
+                var img = '';
+                try {
+                    img = pdfh(list[i], 'img&&src') || pdfh(list[i], '.pic&&Html');
+                    if (img && img.indexOf('url(') >= 0) {
+                        var im = img.match(/url\((['"]?)(.*?)\1\)/);
+                        if (im) img = im[2];
+                    }
+                } catch (e) {}
+                var desc = '';
+                try {
+                    desc = pdfh(list[i], '.sBottom||.covericon||.sDes&&Text');
+                } catch (e) {}
+                pushOne(title, url, img, desc);
+            }
+        } catch (e) {}
+    }
+
+    if (hit < 1) {
+        d.push({
+            title: (siteTitle ? siteTitle + ' ' : '') + '未找到「' + wd + '」（源站搜索升级中，已用分类/RSS 检索）',
+            url: dom,
+            desc: '',
+            pic_url: '',
+            col_type: 'text_1'
+        });
+    }
+}
+
 function hiksearch() {
     var urlph = $.toString(() => {
         if (/dm84/.test(url)) {
@@ -801,7 +922,8 @@ function hiksearch() {
         } else if (/auete/.test(url)) {
             url = url + '/auete4so.php?searchword=' + spl[2];
         } else if (/wwgz/.test(url)) {
-            url = url + '/index.php？？m=vod-search?wd=' + spl[2];
+            // 站内搜索模板失效，带关键词走自定义检索
+            url = url + '/vod-type-id-1-pg-fypage.html?wd=' + encodeURIComponent(spl[2]);
         }
     });
     var res = {};
@@ -832,14 +954,13 @@ function hiksearch() {
                                 var Url = url.replace('fypage', '1');
                                 if (/wwgz/.test(Url)) {
                                     Data.push({
-                                        url: Url.split('?')[0].replace('？？', '?'),
+                                        url: Url,
                                         options: {
                                             headers: {
-                                                "User-Agent": MOBILE_UA
+                                                "User-Agent": MOBILE_UA,
+                                                "Referer": Url.match(/([\S]*?:\/\/[\S]*?)\//)[1] + '/'
                                             },
-                                            body: Url.split('?')[1],
-                                            method: 'POST',
-                                            timeout: tout
+                                            timeout: 15000
                                         }
                                     });
                                 } else if (/omofuna/.test(Url)) {
@@ -913,6 +1034,21 @@ function hiksearch() {
                                         eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
                                         hikseaerji();
                                     }, param.tit.tit);
+                                    if (/wwgz/.test(param.it.url)) {
+                                        var omdomin = param.it.url.match(/([\S]*?:\/\/[\S]*?)\//)[1];
+                                        var wd = '';
+                                        try {
+                                            var wm = param.it.url.match(/[?&]wd=([^&#]+)/);
+                                            if (wm) wd = decodeURIComponent(wm[1].replace(/\+/g, ' '));
+                                        } catch (e) {}
+                                        var page = 1;
+                                        try {
+                                            var pm = param.it.url.match(/-pg-(\d+)\.html/);
+                                            if (pm) page = parseInt(pm[1], 10) || 1;
+                                        } catch (e) {}
+                                        wwgzFillSearch(d, omdomin, wd, page, param.tit.tit);
+                                        return d;
+                                    }
                                     let html = fetch(param.it.url, param.it.options);
                                     if (html == "" || html == null || html.substring(0, 5) == 'error') {
                                         d.push({
@@ -1139,7 +1275,7 @@ function hiksearch() {
             if (/saohuo|shdy3|shdy2|dm84/.test(url)) {
                 var link = url + ';get;utf-8;{User-Agent@.js:MOBILE_UA&&Cookie@.js:fetch("hiker://files/rules/xyq/xqyscookie/' + list[j].title + 'cookie.txt", {})}';
             } else if (/wwgz/.test(url)) {
-                var link = url + ';post;utf-8;{User-Agent@.js:MOBILE_UA}';
+                var link = url + ';get;utf-8;{User-Agent@.js:MOBILE_UA}';
             } else if (/viptv/.test(url)) {
                 var link = url + ';get;utf-8;{User-Agent@.js:MOBILE_UA&&Cookie@.js:fetch("hiker://files/rules/xyq/xqyscookie/' + list[j].title + 'cookie.txt", {})}';
             } else if (/omofuna/.test(url)) {
@@ -1377,6 +1513,24 @@ function ssjiex() {
 function hikseaerji() {
     var res = {};
     var d = [];
+    var spl = MY_URL.match(/([\S]*?:\/\/[\S]*?)\//)[1];
+    // 农民影视站内搜索不可用，走分类/RSS 关键词检索
+    if (/wwgz/.test(spl)) {
+        var wd = '';
+        try {
+            var wm = MY_URL.match(/[?&]wd=([^&#]+)/);
+            if (wm) wd = decodeURIComponent(wm[1].replace(/\+/g, ' '));
+        } catch (e) {}
+        var page = typeof MY_PAGE != 'undefined' ? MY_PAGE : 1;
+        try {
+            var pm = MY_URL.match(/-pg-(\d+)\.html/);
+            if (pm) page = parseInt(pm[1], 10) || page;
+        } catch (e) {}
+        wwgzFillSearch(d, spl, wd, page, '');
+        res.data = d;
+        setHomeResult(res);
+        return;
+    }
     var html = getResCode();
 
     if (html.indexOf('检测中') != -1) {
@@ -1388,7 +1542,6 @@ function hikseaerji() {
         });
     };
 
-    var spl = MY_URL.match(/([\S]*?:\/\/[\S]*?)\//)[1];
     // Omofun 搜索需先过安全验证，否则只会拿到验证页
     if (/omofuna/.test(spl) && html.search(/系统安全验证|因访问过多|继续访问/) != -1) {
         var ckt = typeof cktitle != 'undefined' ? cktitle : 'Omofun动漫';
