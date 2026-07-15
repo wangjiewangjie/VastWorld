@@ -32,6 +32,44 @@
         }),
         col_type: 'flex_button'
     });
+    d.push({
+        title: '更新规则',
+        url: $("#noLoading#").lazyRule(() => {
+            var jsBase = 'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/hikermovie.js';
+            var jsonBase = 'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/hikermovie.json';
+            var dir = 'hiker://files/rules/xyq/';
+            var opt = {
+                headers: {
+                    'User-Agent': MOBILE_UA,
+                    'Cache-Control': 'no-cache',
+                    Pragma: 'no-cache'
+                }
+            };
+            function pull(url, check) {
+                try {
+                    var content = fetch(url + '?t=' + Date.now(), opt);
+                    if (content && content.substring(0, 5) != 'error' && check(content)) {
+                        return content;
+                    }
+                } catch (e) {}
+                return '';
+            }
+            var rulejs = pull(jsBase, function (c) {
+                return c.search(/lazyRule/) != -1;
+            });
+            var rulejson = pull(jsonBase, function (c) {
+                return c.search(/\"vodhref\"/) != -1;
+            });
+            if (rulejs) writeFile(dir + 'hikermovie.js', rulejs);
+            if (rulejson) writeFile(dir + 'hikermovie.json', rulejson);
+            if (rulejs && rulejson) {
+                refreshPage(false);
+                return 'toast://更新成功，请返回重新进入规则以加载最新脚本';
+            }
+            return 'toast://更新失败，请检查网络';
+        }),
+        col_type: 'flex_button'
+    });
     for (var i = 0; i < json.data.length; i++) {
         var tab = json.data[i];
         for (var k = 0; k < tab.list.length; k++) {
@@ -72,6 +110,8 @@ function hikhmerj() {
                     var url = spl + '/vod/type/id/' + clsu[i] + '/page/fypage.html';
                 } else if (/qkan8/.test(spl)) {
                     var url = spl + '/index.php/vod/type/id/' + clsu[i] + '/page/fypage.html';
+                } else if (/omofuna/.test(spl)) {
+                    var url = spl + '/type/' + clsu[i] + '-fypage.html[firstPage=' + spl + '/type/' + clsu[i] + '.html]';
                 } else if (/wwgz/.test(spl)) {
                     var url = spl + '/vod-list-id-' + clsu[i] + '-pg-fypage-order--by-time-class-0-year-0-letter--area--lang-.html';
                 }
@@ -209,6 +249,8 @@ function hikhmerj() {
             var conts = pdfa(html, 'body&&.fadeInUp:has(.gen-movie-img)');
         } else if (/align-items-center/.test(html) && /card-link/.test(html)) {
             var conts = pdfa(html, 'body&&.container:has(.card-link)');
+        } else if (/daFJ_dJJfFHa/.test(html)) {
+            var conts = pdfa(html, 'body&&.daFJ_dJJfFHa');
         }
 
         for (var i = 0; i < conts.length; i++) {
@@ -504,6 +546,8 @@ function clsrule() {
             var list = pdfa(html, '.globalPicList&&li');
         } else if (/public-list-button/.test(html) && /public-list-box/.test(html)) {
             var list = pdfa(html, '.list-vod||.border-box&&.public-list-box');
+        } else if (/daFJ_dJJfFHa/.test(html)) {
+            var list = pdfa(html, 'body&&.daFJ_dJJfFHa&&li');
         }
 
         for (var i = 0; i < list.length; i++) {
@@ -643,6 +687,8 @@ function hiksearch() {
             url = url + '/vod/search/page/fypage/wd/' + spl[2] + '.html';
         } else if (/qkan8/.test(url)) {
             url = url + '/index.php/vod/search/page/fypage/wd/' + spl[2] + '.html';
+        } else if (/omofuna/.test(url)) {
+            url = url + '/search/' + spl[2] + '----------fypage.html';
         } else if (/auete/.test(url)) {
             url = url + '/auete4so.php?searchword=' + spl[2];
         } else if (/wwgz/.test(url)) {
@@ -686,7 +732,7 @@ function hiksearch() {
                                             timeout: tout
                                         }
                                     });
-                                } else if (/viptv|saohuo|shdy3|shdy2|dm84/.test(Url)) {
+                                } else if (/viptv|saohuo|shdy3|shdy2|dm84|omofuna/.test(Url)) {
                                     Data.push({
                                         url: Url,
                                         options: {
@@ -942,6 +988,8 @@ function hiksearch() {
                 var link = url + ';post;utf-8;{User-Agent@.js:MOBILE_UA}';
             } else if (/viptv/.test(url)) {
                 var link = url + ';get;utf-8;{User-Agent@.js:MOBILE_UA&&Cookie@.js:fetch("hiker://files/rules/xyq/xqyscookie/' + list[j].title + 'cookie.txt", {})}';
+            } else if (/omofuna/.test(url)) {
+                var link = url + ';get;utf-8;{User-Agent@.js:MOBILE_UA&&Cookie@.js:fetch("hiker://files/rules/xyq/xqyscookie/' + list[j].title + 'cookie.txt", {})}';
             } else {
                 var link = url
             }
@@ -998,6 +1046,8 @@ function ssjiex() {
             var list = pdfa(html, '.ewave-vodlist__media&&li');
         } else if (/stui-vodlist/.test(html)) {
             var list = pdfa(html, '.stui-vodlist&&li:has(a)');
+        } else if (/daFJ_dJJfFHa/.test(html)) {
+            var list = pdfa(html, 'body&&.daFJ_dJJfFHa&&li');
         } else if (/vodlist/.test(html) && /searchlist_item/.test(html)) {
             var list = pdfa(html, '.vodlist&&li');
         } else if (/class\=\"v_list/.test(html)) {
@@ -1273,7 +1323,22 @@ function hikseaerji() {
             }
         });
     };
-    if (html.search(/请输入验证码|验证后查看搜索结果|首次搜索需要输入验证码|访问此数据需要输入验|正确的验证码继续访问|需要先输入验证码/) != -1 && !/wwgz/.test(spl)) {
+    if (html.search(/请输入验证码|验证后查看搜索结果|首次搜索需要输入验证码|访问此数据需要输入验|正确的验证码继续访问|需要先输入验证码|系统安全验证|因访问过多/) != -1 && !/wwgz/.test(spl)) {
+        if (/omofuna/.test(spl) && html.search(/系统安全验证|因访问过多|继续访问/) != -1) {
+            d.push({
+                title: '需要安全验证，点此打开网页点「继续访问」后再返回刷新',
+                url: MY_URL,
+                col_type: 'text_center_1'
+            });
+            d.push({
+                title: '我已完成验证，刷新',
+                url: $('#noLoading#').lazyRule(() => {
+                    refreshPage(false);
+                    return 'hiker://empty';
+                }),
+                col_type: 'text_center_1'
+            });
+        } else {
         var imglin = /saohuo|shdy3|shdy2|auete/.test(spl) ? spl + '/include/vdimgck.php?get=' + new Date() : spl + '/index.php/verify/index.html?r=' + Math.random();
             var cok = JSON.parse(fetchCookie(imglin, {
                 headers: {
@@ -1340,6 +1405,7 @@ function hikseaerji() {
                 }, cok, spl, cktitle),
                 col_type: 'text_2'
             });
+        }
     } else if (html.indexOf('不要频繁操作') >= 0) {
         d.push({
             title: '太过频繁，等待6秒后下滑刷新本页面。',
@@ -1402,6 +1468,9 @@ function omerj() {
     } else if (/wwgz/.test(omdomin)) {
         var tabs = pdfa(html, '#leftTabBox&&ul&&li');
         var conts = pdfa(html, '#leftTabBox&&.numList');
+    } else if (/channel-tab/.test(html) && /play-list-content/.test(html)) {
+        var tabs = pdfa(html, '.channel-tab&&li');
+        var conts = pdfa(html, 'body&&.play-list-content');
     } else if (/hy-play-list/.test(html) && /tab-content/.test(html)) {
         var tabs = pdfa(html, '.tab-content&&.option');
         var conts = pdfa(html, '.tab-content&&.playlist');
@@ -1874,6 +1943,28 @@ function omlazy() {
             } else {
                 return x5rule(srcurl, srcurl);
             }
+        }
+        else if (/omofuna/.test(myurl)) {
+            var phtml = fetch(srcurl, {
+                headers: {
+                    "User-Agent": MOBILE_UA,
+                    "Referer": myurl
+                }
+            });
+            var m = phtml.match(/var player_aaaa=(\{[\s\S]*?\});/);
+            if (m) {
+                eval('var player_aaaa=' + m[1]);
+                var urll = player_aaaa.url;
+                if (player_aaaa.encrypt == '1' || player_aaaa.encrypt == 1) {
+                    urll = unescape(urll);
+                } else if (player_aaaa.encrypt == '2' || player_aaaa.encrypt == 2) {
+                    urll = unescape(base64Decode(urll));
+                }
+                if (/\.m3u8|\.mp4|obj\/tos/.test(urll) && /http/.test(urll)) {
+                    return playUrl(urll + '#isVideo=true#');
+                }
+            }
+            return x5rule(srcurl, srcurl);
         }
 
         else {

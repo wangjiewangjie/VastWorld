@@ -1,7 +1,7 @@
 {
   "note": "",
   "content": "",
-  "version": "8",
+  "version": "9",
   "data": [
       {
           "type": "影视",
@@ -44,12 +44,13 @@
                   "url": "https://qkan8.com"
               },
               {
-                  "title": "动漫巴士",
-                  "vodtype": "国产动漫&日本动漫&欧美动漫&电影",
-                  "vodhref": "1&2&3&4",
+                  "title": "Omofun动漫",
+                  "vodtype": "日漫&国漫&美漫&特摄&动画&剧场",
+                  "vodhref": "1&2&3&4&5&24",
                   "ico": "",
-                  "url": "https://dm84.tv"
+                  "url": "https://www.omofuna.com"
               }
+
           ]
       }
   ],

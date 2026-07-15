@@ -79,12 +79,10 @@ function loadRules() {
   return false;
 }
 
-uprulefile(false);
-
+// 优先加载本地，仅首次无本地文件时才拉取；平时用首页「更新规则」手动更新
 if (!loadRules()) {
-  uprulefile(true);
-
-  if (!loadRules()) {
+  if (uprulefile(true) && loadRules()) {
+  } else {
     setError("本地规则加载失败，请检查网络后重试");
   }
 }
