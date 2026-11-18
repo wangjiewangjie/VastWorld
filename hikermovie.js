@@ -3,6 +3,7 @@ var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 var RULE_VER = 'v21-anime2';
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
+    'http://192.168.3.222:8765/',
     'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
     'https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/'
 ];
