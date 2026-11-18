@@ -1,10 +1,11 @@
 ﻿// ========== 公共工具（对齐 Feather / 海阔文档：$ / require / getHome）==========
 // 文档：https://docs.189.tyrantg.com/docs/hikerview/help_js.html
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
+var RULE_VER = 'v17-idx';
 var RULE_BASES = [
-    'https://cdn.jsdelivr.net/gh/wangjiewangjie/VastWorld@main/',
     'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
-    'https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/'
+    'https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
+    'https://cdn.jsdelivr.net/gh/wangjiewangjie/VastWorld@main/'
 ];
 
 // 模板指纹库：按页面 HTML 模糊打分匹配，新站同模板无需再写 JS
@@ -726,6 +727,7 @@ function hikhmrule() {
             title: '更新规则',
             url: $('#noLoading#').lazyRule((bases) => {
                 var dir = 'hiker://files/rules/xyq/';
+                var ver = typeof RULE_VER != 'undefined' ? RULE_VER : 'v17-idx';
                 var opt = {
                     headers: {
                         'User-Agent': MOBILE_UA,
@@ -747,20 +749,19 @@ function hikhmrule() {
                 }
                 for (var i = 0; i < bases.length; i++) {
                     var rulejs = pull(bases[i] + 'hikermovie.js', function (c) {
-                        return c.search(/lazyRule/) != -1;
+                        return c.search(/lazyRule/) != -1 && c.indexOf(ver) != -1;
                     });
                     var rulejson = pull(bases[i] + 'hikermovie.json', function (c) {
                         return c.search(/\"vodhref\"/) != -1;
                     });
                     if (rulejs && rulejson) {
-                        // 本地已有端口修复时，禁止被未含 embedHost 的旧远程覆盖
-                        var localJs = '';
-                        try { localJs = fetch(dir + 'hikermovie.js') || ''; } catch (e) {}
-                        if (localJs.indexOf('embedHost') != -1 && rulejs.indexOf('embedHost') == -1) {
-                            return 'toast://远程版本过旧，已跳过覆盖（保留本地端口修复）';
-                        }
                         writeFile(dir + 'hikermovie.js', rulejs);
                         writeFile(dir + 'hikermovie.json', rulejson);
+                        var check = '';
+                        try { check = fetch(dir + 'hikermovie.js') || ''; } catch (e) {}
+                        if (check.indexOf(ver) < 0) {
+                            return 'toast://写入校验失败，请手动覆盖文件';
+                        }
                         try {
                             eval(rulejs);
                             if (typeof hikerpre == 'function') hikerpre();
@@ -768,10 +769,10 @@ function hikhmrule() {
                             logErr('hikhmrule.eval', e);
                         }
                         refreshPage(false);
-                        return 'toast://更新成功';
+                        return 'toast://已更新 ' + ver + '，请下拉刷新，勿从历史记录进站';
                     }
                 }
-                return 'toast://更新失败，请检查网络或代理';
+                return 'toast://更新失败，请检查网络（需访问 GitHub raw）';
             }, RULE_BASES),
             col_type: 'flex_button'
         });
