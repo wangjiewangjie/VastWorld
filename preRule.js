@@ -30,6 +30,14 @@ function fetchRule(url, check) {
 }
 
 function uprulefile() {
+  var localJs = "";
+  try {
+    localJs = fetch(RULE_DIR + RULE_JS_NAME) || "";
+  } catch (e) {}
+  // 本地已有端口修复时，不要用旧远程覆盖
+  if (localJs.indexOf("embedHost") != -1) {
+    return false;
+  }
   for (var i = 0; i < RULE_BASES.length; i++) {
     var base = RULE_BASES[i];
     var rulejs = fetchRule(base + RULE_JS_NAME, function (c) {
@@ -82,6 +90,13 @@ function buildUpdateItem() {
           return c.search(/\"vodhref\"/) != -1;
         });
         if (rulejs && rulejson) {
+          var localJs = "";
+          try {
+            localJs = fetch(dir + "hikermovie.js") || "";
+          } catch (e) {}
+          if (localJs.indexOf("embedHost") != -1 && rulejs.indexOf("embedHost") == -1) {
+            return "toast://远程版本过旧，已跳过覆盖（保留本地端口修复）";
+          }
           writeFile(dir + "hikermovie.js", rulejs);
           writeFile(dir + "hikermovie.json", rulejson);
           try {

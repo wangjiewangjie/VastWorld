@@ -733,6 +733,12 @@ function hikhmrule() {
                         return c.search(/\"vodhref\"/) != -1;
                     });
                     if (rulejs && rulejson) {
+                        // 本地已有端口修复时，禁止被未含 embedHost 的旧远程覆盖
+                        var localJs = '';
+                        try { localJs = fetch(dir + 'hikermovie.js') || ''; } catch (e) {}
+                        if (localJs.indexOf('embedHost') != -1 && rulejs.indexOf('embedHost') == -1) {
+                            return 'toast://远程版本过旧，已跳过覆盖（保留本地端口修复）';
+                        }
                         writeFile(dir + 'hikermovie.js', rulejs);
                         writeFile(dir + 'hikermovie.json', rulejson);
                         try {
@@ -756,12 +762,17 @@ function hikhmrule() {
                 d.push({
                     title: list.title,
                     img: list.ico + '@Referer=',
-                    // embedHost：避免 https://host:port$$ 被海阔当成请求 URL 解析端口失败
-                    url: 'hiker://empty$$fypage$$' + list.vodtype + '$$' + list.vodhref + '$$' + embedHost(list.url),
+                    // 绝不能写成 empty$$https://host:port$$页码 — 海阔会当成请求 URL 报 Invalid URL port
+                    url: 'hiker://empty#noRecordHistory#$$fypage$$' + list.vodtype + '$$' + list.vodhref + '$$' + embedHost(list.url),
                     col_type: 'icon_4_card'
                 });
             }
         }
+        d.unshift({
+            title: '引擎 v16-portfix（进站若仍报 5200$$ 说明手机还是旧脚本）',
+            url: 'hiker://empty',
+            col_type: 'text_center_1'
+        });
     } catch (e) {
         d.push(errCard('hikhmrule', e));
     }

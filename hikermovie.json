@@ -1,7 +1,7 @@
 {
   "note": "加站只需 url+vodtype+vodhref；模板由 JS 按页面指纹模糊匹配，无需再写 engine",
   "content": "",
-  "version": "15",
+  "version": "16",
   "data": [
       {
           "type": "影视",
