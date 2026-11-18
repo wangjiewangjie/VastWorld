@@ -5,6 +5,7 @@ var RULE_VER = "v21-anime2";
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
 var RULE_BASES = [
+  "http://192.168.3.222:8765/",
   "https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
   "https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
 ];
