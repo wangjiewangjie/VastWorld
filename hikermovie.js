@@ -443,6 +443,38 @@ function absUrl(url, base) {
     return (base || '') + url;
 }
 
+// 嵌入 MY_URL 时去掉 https:// 与端口冒号，防止海阔自动请求解析出非法 port
+function embedHost(u) {
+    return (u || '').replace(/:\/\//g, '@@').replace(/:/g, '##');
+}
+function decodeHost(u) {
+    u = (u || '').replace(/\/$/, '');
+    if (!u) return '';
+    // https@@vip.wwgz.cn##5200 → https://vip.wwgz.cn:5200
+    u = u.replace(/@@/g, '://').replace(/##/g, ':');
+    // 若误成 https::::/host 之类则再兜底
+    u = u.replace(/:\/\/:\/\//g, '://');
+    return u;
+}
+function parseSitePageUrl(my) {
+    // 新: empty$$页码$$type$$href$$embedHost  旧: empty$$url$$页码$$type$$href
+    var parts = (my || '').split('$$');
+    var p1 = parts[1] || '';
+    var out = { pn: '1', vtype: '', vhref: '', spl: '' };
+    if (/^https?:/i.test(p1) || /^(https?)@@/i.test(p1) || p1.indexOf('@@') != -1) {
+        out.spl = decodeHost(p1);
+        out.pn = parts[2] || '1';
+        out.vtype = parts[3] || '';
+        out.vhref = parts[4] || '';
+    } else {
+        out.pn = p1 || '1';
+        out.vtype = parts[2] || '';
+        out.vhref = parts[3] || '';
+        out.spl = decodeHost(parts.slice(4).join('$$'));
+    }
+    return out;
+}
+
 function imgReferer(img, base) {
     if (!img) return '';
     if (/imgdb/.test(img)) return img + '@Referer=';
@@ -482,8 +514,7 @@ function sortToggleRule() {
 }
 
 function playLazyRule(omdomin, link, title) {
-    // host 放最后，避免 :port$$$ 被解析成非法端口
-    return $('hiker://empty$$$' + link + '$$$' + title + '$$$' + omdomin).lazyRule(() => {
+    return $('hiker://empty$$$' + embedHost(link) + '$$$' + title + '$$$' + embedHost(omdomin)).lazyRule(() => {
         require('hiker://files/rules/xyq/hikermovie.js');
         return omlazy();
     });
@@ -724,8 +755,8 @@ function hikhmrule() {
                 d.push({
                     title: list.title,
                     img: list.ico + '@Referer=',
-                    // 站点 URL 放最后，避免 host:port$$页码 被当成非法端口去请求
-                    url: 'hiker://empty$$fypage$$' + list.vodtype + '$$' + list.vodhref + '$$' + list.url,
+                    // embedHost：避免 https://host:port$$ 被海阔当成请求 URL 解析端口失败
+                    url: 'hiker://empty$$fypage$$' + list.vodtype + '$$' + list.vodhref + '$$' + embedHost(list.url),
                     col_type: 'icon_4_card'
                 });
             }
@@ -740,12 +771,11 @@ function hikhmerj() {
     var res = {};
     var d = [];
     try {
-        // MY_URL: hiker://empty$$页码$$vodtype$$vodhref$$https://host:port
-        var parts = MY_URL.split('$$');
-        var pn = parts[1];
-        var vtype = parts[2];
-        var vhref = parts[3];
-        var spl = (parts.slice(4).join('$$') || '').replace(/\/$/, '');
+        var page = parseSitePageUrl(MY_URL);
+        var pn = page.pn;
+        var vtype = page.vtype;
+        var vhref = page.vhref;
+        var spl = page.spl;
         if (pn == 1) {
             // 先拉首页做指纹匹配，并用来模糊推断分类/搜索 URL
             var html = passHtmlGuard(request(spl, {}), spl, {
@@ -1464,7 +1494,7 @@ function omerj(movTitle) {
                         extra: {
                             blockRules: ['.css', '.gif', '.jpeg', '.png', '.ico', 'cnzz', '.51.la', 'google', 'xn--*:*', 'hm.baidu.com', '/ads/*.js'],
                             referer: omdomin,
-                            id: 'hiker://empty$$$' + link + '$$$' + title + '$$$' + omdomin
+                            id: 'hiker://empty$$$' + embedHost(link) + '$$$' + title + '$$$' + embedHost(omdomin)
                         },
                         col_type: clt
                     });
@@ -1486,16 +1516,19 @@ function omerj(movTitle) {
 }
 
 function omlazy() {
-    // 新: empty$$$playUrl$$$title$$$host  旧: empty$$$host$$$playUrl$$$title
+    // 新: empty$$$embed(play)$$$title$$$embed(host)  旧: empty$$$host$$$play$$$title
     var _p = input.split('$$$');
+    var d1 = decodeHost(_p[1] || '');
+    var d2 = decodeHost(_p[2] || '');
+    var d3 = decodeHost(_p.slice(3).join('$$$') || '');
     var srcurl = '';
     var myurl = '';
-    if (/^https?:/i.test(_p[2] || '')) {
-        myurl = (_p[1] || '').replace(/\/$/, '');
-        srcurl = _p[2] || '';
+    if (/^https?:/i.test(d1) && /^https?:/i.test(d2)) {
+        myurl = d1.replace(/\/$/, '');
+        srcurl = d2;
     } else {
-        srcurl = _p[1] || '';
-        myurl = (_p.slice(3).join('$$$') || '').replace(/\/$/, '');
+        srcurl = d1;
+        myurl = d3.replace(/\/$/, '');
     }
     try {
         function playUrl(urls) {
