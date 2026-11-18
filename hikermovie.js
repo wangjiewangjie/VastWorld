@@ -1,10 +1,10 @@
 ﻿// hikermovie v20 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 var RULE_VER = 'v20-anime2';
+// 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
-    'https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
-    'https://cdn.jsdelivr.net/gh/wangjiewangjie/VastWorld@main/'
+    'https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/'
 ];
 var COOKIE_DIR = 'hiker://files/rules/xyq/xqyscookie/';
 
@@ -229,14 +229,18 @@ function hikhmrule() {
                     try {
                         var js = fetch(bases[i] + 'hikermovie.js?t=' + Date.now(), opt) || '';
                         var jn = fetch(bases[i] + 'hikermovie.json?t=' + Date.now(), opt) || '';
+                        // 必须含版本号；拒绝明显过大的旧包
                         if (js.indexOf(ver) < 0 || jn.indexOf('vodhref') < 0) continue;
+                        if (js.length > 45000 || /旺旺影视|gangjuwang|wwgz\.cn/.test(js)) continue;
                         writeFile(dir + 'hikermovie.js', js);
                         writeFile(dir + 'hikermovie.json', jn);
+                        var check = fetch(dir + 'hikermovie.js') || '';
+                        if (check.indexOf(ver) < 0) return 'toast://写入校验失败';
                         refreshPage(false);
-                        return 'toast://已更新 ' + ver;
+                        return 'toast://已更新 ' + ver + ' (' + js.length + 'B)';
                     } catch (e) {}
                 }
-                return 'toast://更新失败';
+                return 'toast://更新失败：未能拉到 ' + ver + '（勿用 jsDelivr 缓存）';
             }, RULE_BASES, RULE_VER),
             col_type: 'flex_button'
         });
