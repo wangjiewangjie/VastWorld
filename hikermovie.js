@@ -1,6 +1,6 @@
-﻿// hikermovie v20 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
+﻿// hikermovie v21 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
-var RULE_VER = 'v20-anime2';
+var RULE_VER = 'v21-anime2';
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
@@ -16,10 +16,10 @@ var SITES = {
         cate: '{host}/type/{id}-fypage.html[firstPage={host}/type/{id}.html]',
         search: '{host}/search/{wd}----------fypage---.html',
         needCookie: true,
-        list: 'body&&.daFJ_dJJfFHa&&li||body&&.FieH_hiaFheE&&li',
-        img: '.lazyload||a&&data-original||data-src||src',
-        title: 'a[title]&&title||h4&&a&&Text||a&&Text',
-        desc: '.aaE_EaDE||.aaE_EaDEa||.Iha_Ejhh||span&&Text',
+        list: 'body&&.daFJ_dJJfFHa&&li||body&&ul.daFJ_dJJfFHa&&li',
+        img: 'a&&data-original||.lazyload&&data-original||img&&data-original||img&&src',
+        title: 'a&&title||h4&&a&&Text||a&&Text',
+        desc: '.aaE_EaDE&&Text||.aaE_EaDEa&&Text||span&&Text',
         url: 'a&&href',
         tabs: 'body&&.channel-tab&&li',
         conts: 'body&&.play-list-content',
@@ -30,10 +30,11 @@ var SITES = {
         host: 'https://www.vtt6.com',
         cate: '{host}/type/{id}/fypage/[firstPage={host}/type/{id}/]',
         search: '{host}/search/?wd={ewd}',
-        list: 'body&&.main&&li||body&&ul&&li',
-        img: '.lazy||img&&data-original||data-src||src',
-        title: 'a[title]&&title||img&&alt||a&&Text',
-        desc: '.bofang||span&&Text',
+        // 首页/分类 .main；搜索页是 .search（无 .main）
+        list: 'body&&.main&&ul&&li||body&&.search&&ul&&li||body&&.main&&li||body&&.search&&li',
+        img: '.lazy&&data-original||img&&data-original||img&&data-src||img&&src',
+        title: 'a&&title||img&&alt||h3&&a&&Text||a&&Text',
+        desc: '.txt&&p&&Text||p&&Text||.bofang&&Text',
         url: 'a&&href',
         tabs: 'body&&.playlist&&.tabs&&a',
         conts: 'body&&.playlist&&.row',
@@ -83,6 +84,38 @@ function firstPdfa(html, sel) {
     return [];
 }
 
+function firstPdfh(html, sel) {
+    if (!html || !sel) return '';
+    var parts = (sel + '').split('||');
+    for (var i = 0; i < parts.length; i++) {
+        try {
+            var v = pdfh(html, parts[i].replace(/^\s+|\s+$/g, ''));
+            if (v) return v;
+        } catch (e) {}
+    }
+    return '';
+}
+
+function pageNum(raw) {
+    var s = String(raw == null ? '1' : raw).replace(/fypage/gi, '1');
+    var n = parseInt(s, 10);
+    return (isNaN(n) || n < 1) ? 1 : n;
+}
+
+// 展开 cate 模板：[firstPage=...] 仅第 1 页使用
+function cateUrl(site, host, id, page) {
+    var tpl = site.cate || '';
+    var first = '';
+    var m = tpl.match(/\[firstPage=(.*?)\]/);
+    if (m) {
+        first = m[1];
+        tpl = tpl.replace(/\[firstPage=.*?\]/, '');
+    }
+    var vars = { host: host, id: id };
+    if (page <= 1 && first) return fillTpl(first, vars);
+    return fillTpl(tpl, vars).replace(/fypage/g, String(page));
+}
+
 function getSite(key) {
     return SITES[key] || null;
 }
@@ -110,13 +143,17 @@ function parseList(html, site, host) {
     var items = firstPdfa(html, site.list);
     var out = [];
     for (var i = 0; i < items.length; i++) {
-        var title = '', img = '', desc = '', href = '';
-        try { title = pdfh(items[i], site.title) || ''; } catch (e) {}
-        try { img = pdfh(items[i], site.img) || ''; } catch (e) {}
-        try { desc = pdfh(items[i], site.desc) || ''; } catch (e) {}
+        var title = firstPdfh(items[i], site.title);
+        var img = firstPdfh(items[i], site.img);
+        var desc = firstPdfh(items[i], site.desc);
+        var href = '';
         try { href = pd(items[i], site.url.split('||')[0]); } catch (e) {}
-        if (!href) try { href = pdfh(items[i], site.url); } catch (e) {}
-        if (!title || !href) continue;
+        if (!href) href = firstPdfh(items[i], site.url);
+        if (!href || /javascript:/i.test(href)) continue;
+        if (!title) continue;
+        // 丢掉导航分类链（保留 /detail/ /anime/ /play/）
+        var full = absUrl(href, host);
+        if (/\/(type|show|label|mangatype|arttype)\//i.test(full) && !/\/(detail|anime|video|vod|play)\//i.test(full)) continue;
         out.push({
             title: title,
             img: absUrl(img, host),
@@ -276,9 +313,10 @@ function hikhmerj() {
     var d = res.data;
     try {
         // MY_URL: hiker://empty#...$$key$$页码$$vodtype$$vodhref
+        // 注意：未翻页时 parts[2] 可能仍是字面量 "fypage"
         var parts = MY_URL.split('$$');
         var key = parts[1] || '';
-        var pn = parts[2] || '1';
+        var pn = pageNum(parts[2]);
         var vtype = parts[3] || '';
         var vhref = parts[4] || '';
         var site = getSite(key);
@@ -288,9 +326,9 @@ function hikhmerj() {
             return;
         }
         var host = site.host;
+        var types = vtype.split('&');
+        var ids = vhref.split('&');
         if (pn == 1) {
-            var types = vtype.split('&');
-            var ids = vhref.split('&');
             for (var i = 0; i < types.length; i++) {
                 if (!types[i] || !ids[i]) continue;
                 var cate = fillTpl(site.cate, { host: host, id: ids[i] });
@@ -303,9 +341,29 @@ function hikhmerj() {
                     col_type: 'scroll_button'
                 });
             }
-            d.push({ col_type: 'line' });
-            var html = fetchPage(host + '/', host);
-            pushCards(d, parseList(html, site, host), host, 'movie_3_marquee');
+            if (types.length) d.push({ col_type: 'line' });
+        }
+
+        var html = '';
+        var list = [];
+        if (pn == 1) {
+            html = fetchPage(host + '/', host);
+            list = parseList(html, site, host);
+        }
+        // 首页拉空 / 翻页：用第一个分类兜底
+        if (!list.length && ids[0]) {
+            var fallback = cateUrl(site, host, ids[0], pn);
+            html = fetchPage(fallback, host);
+            list = parseList(html, site, host);
+        }
+        if (!list.length) {
+            d.push({
+                title: '暂无列表 · 可点上方分类重试 · html=' + ((html || '').length),
+                url: host + '/',
+                col_type: 'text_center_1'
+            });
+        } else {
+            pushCards(d, list, host, 'movie_3_marquee');
         }
     } catch (e) {
         d.push(errItem('site', e));
@@ -324,8 +382,17 @@ function clsrule(key) {
         var html = '';
         try { html = getResCode() || ''; } catch (e) {}
         if (!html) html = fetchPage(MY_URL, host);
-        refreshX5WebView('');
-        pushCards(d, parseList(html, site, host), host, 'movie_3_marquee');
+        try { refreshX5WebView(''); } catch (e) {}
+        var list = parseList(html, site, host);
+        if (!list.length) {
+            d.push({
+                title: '分类无数据 · html=' + ((html || '').length),
+                url: MY_URL,
+                col_type: 'text_center_1'
+            });
+        } else {
+            pushCards(d, list, host, 'movie_3_marquee');
+        }
     } catch (e) {
         d.push(errItem('cate', e));
     }
