@@ -142,6 +142,8 @@ function loadSiteMap() {
             for (var j = 0; j < list.length; j++) {
                 var s = list[j];
                 if (!s || !s.url) continue;
+                // JSON 里可能是 https@@host##port，内存中统一还原
+                s.url = decodeHost(s.url);
                 var host = (s.url + '').replace(/\/$/, '');
                 map[host] = s;
                 try {
@@ -457,19 +459,36 @@ function decodeHost(u) {
     return u;
 }
 function parseSitePageUrl(my) {
-    // 新: empty$$页码$$type$$href$$embedHost  旧: empty$$url$$页码$$type$$href
+    // 推荐: empty$$页码$$tabIdx$$siteIdx（MY_URL 不含 http，彻底避免端口解析）
+    // 兼容: empty$$页码$$type$$href$$embedHost  /  empty$$url$$页码$$type$$href
     var parts = (my || '').split('$$');
     var p1 = parts[1] || '';
+    var p2 = parts[2] || '';
+    var p3 = parts[3] || '';
     var out = { pn: '1', vtype: '', vhref: '', spl: '' };
+
+    // 索引进站：$$页码$$分类下标$$站点下标
+    if (/^\d+$/.test(p2) && /^\d+$/.test(p3) && !parts[4]) {
+        out.pn = p1 || '1';
+        try {
+            var json = JSON.parse(fetch(RULE_JSON, {}));
+            var site = json.data[parseInt(p2, 10)].list[parseInt(p3, 10)];
+            out.spl = decodeHost(site.url);
+            out.vtype = site.vodtype || '';
+            out.vhref = site.vodhref || '';
+        } catch (e) {}
+        return out;
+    }
+
     if (/^https?:/i.test(p1) || /^(https?)@@/i.test(p1) || p1.indexOf('@@') != -1) {
         out.spl = decodeHost(p1);
-        out.pn = parts[2] || '1';
-        out.vtype = parts[3] || '';
+        out.pn = p2 || '1';
+        out.vtype = p3 || '';
         out.vhref = parts[4] || '';
     } else {
         out.pn = p1 || '1';
-        out.vtype = parts[2] || '';
-        out.vhref = parts[3] || '';
+        out.vtype = p2 || '';
+        out.vhref = p3 || '';
         out.spl = decodeHost(parts.slice(4).join('$$'));
     }
     return out;
@@ -672,6 +691,7 @@ function hikhmrule() {
     var d = [];
     try {
         var json = JSON.parse(fetch(RULE_JSON, {}));
+        // 进站只带 JSON 下标，避免任何 host:port$$ 进入 MY_URL
         var decText = getMyVar('xyqxqystext', '');
         d.push({
             title: '搜索',
@@ -762,14 +782,14 @@ function hikhmrule() {
                 d.push({
                     title: list.title,
                     img: list.ico + '@Referer=',
-                    // 绝不能写成 empty$$https://host:port$$页码 — 海阔会当成请求 URL 报 Invalid URL port
-                    url: 'hiker://empty#noRecordHistory#$$fypage$$' + list.vodtype + '$$' + list.vodhref + '$$' + embedHost(list.url),
+                    // 只用下标进站，MY_URL 不含 http/端口，避免 Invalid URL port
+                    url: 'hiker://empty#noRecordHistory#$$fypage$$' + i + '$$' + k,
                     col_type: 'icon_4_card'
                 });
             }
         }
         d.unshift({
-            title: '引擎 v16-portfix（进站若仍报 5200$$ 说明手机还是旧脚本）',
+            title: '引擎 v17-idx（首页应显示本行；仍报 5200$$ 请勿从历史记录进站）',
             url: 'hiker://empty',
             col_type: 'text_center_1'
         });
@@ -1046,7 +1066,7 @@ function hiksearch() {
                         for (var j = le - ssxc; j < le; j++) {
                             if (j < list.length) {
                                 var title = list[j].title;
-                                var host = getDomin(list[j].url);
+                                var host = getDomin(decodeHost(list[j].url));
                                 var homeHtml = fetchHomeHtml(host);
                                 var tpl = resolveTemplate(host, homeHtml, list[j]);
                                 var eng = tpl || {};
@@ -1200,7 +1220,7 @@ function hiksearch() {
             });
         }
         for (var j = 0; j < list.length; j++) {
-            var host = getDomin(list[j].url);
+            var host = getDomin(decodeHost(list[j].url));
             var homeHtml = fetchHomeHtml(host);
             var eng = resolveTemplate(host, homeHtml, list[j]) || {};
             var key = eng.key || '';

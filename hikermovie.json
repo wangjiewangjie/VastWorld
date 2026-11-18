@@ -1,7 +1,7 @@
 {
   "note": "加站只需 url+vodtype+vodhref；模板由 JS 按页面指纹模糊匹配，无需再写 engine",
   "content": "",
-  "version": "16",
+  "version": "17",
   "data": [
       {
           "type": "影视",
@@ -11,7 +11,7 @@
                   "vodtype": "电影&连续剧&综艺&动漫&短剧&小姐姐&音乐",
                   "vodhref": "1&2&3&4&26&20&31",
                   "ico": "",
-                  "url": "https://vip.wwgz.cn:5200"
+                  "url": "https@@vip.wwgz.cn##5200"
               },
               {
                   "title": "Auete影视",
