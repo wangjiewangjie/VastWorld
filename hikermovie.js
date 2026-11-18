@@ -492,6 +492,32 @@ function tipCard(title, url) {
     return { title: title, url: url || '', desc: '', pic_url: '', col_type: 'text_1' };
 }
 
+// 统一报错：日志 + 页面可见文案，方便复制粘贴
+function logErr(tag, e) {
+    var msg = '';
+    try {
+        msg = (e && (e.message || e.toString())) || (e + '');
+    } catch (e2) {
+        msg = 'unknown error';
+    }
+    var stack = '';
+    try {
+        if (e && e.stack) stack = e.stack;
+    } catch (e3) {}
+    var text = '[hikermovie][' + tag + '] ' + msg + (stack ? '\n' + stack : '');
+    try { log(text); } catch (e4) {}
+    return text;
+}
+
+function errCard(tag, e) {
+    return {
+        title: '规则报错 · ' + tag,
+        desc: logErr(tag, e),
+        url: 'hiker://empty',
+        col_type: 'long_text'
+    };
+}
+
 function parseWwgzSearch(url) {
     var wd = '', page = 1;
     try {
@@ -604,108 +630,114 @@ function passHtmlGuard(html, url, opts) {
 }
 
 function hikhmrule() {
-    var json = JSON.parse(fetch(RULE_JSON, {}));
     var res = {};
     var d = [];
-    var decText = getMyVar('xyqxqystext', '');
-    d.push({
-        title: '搜索',
-        url: $.toString(() => {
-            var link = 'hiker://empty#noRecordHistory#$$$hiker://files/rules/xyq/hikermovie.json$$$' + input + '$$$fypage$$$';
-            return $(link).rule(() => {
-                require('hiker://files/rules/xyq/hikermovie.js');
-                hiksearch();
-            });
-        }),
-        extra: {
-            onChange: "putMyVar('xyqxqystext',input)",
-            defaultValue: decText,
-            titleVisible: true
-        },
-        col_type: 'input'
-    });
-    d.push({
-        title: '聚合搜索',
-        url: $('#noLoading#').lazyRule(() => {
-            var kw = getMyVar('xyqxqystext', '');
-            if (!kw) return 'toast://请先输入关键词';
-            var link = 'hiker://empty#noRecordHistory#$$$hiker://files/rules/xyq/hikermovie.json$$$' + kw + '$$$fypage$$$';
-            return $(link).rule(() => {
-                require('hiker://files/rules/xyq/hikermovie.js');
-                hiksearch();
-            });
-        }),
-        col_type: 'flex_button'
-    });
-    d.push({
-        title: '更新规则',
-        url: $('#noLoading#').lazyRule((bases) => {
-            var dir = 'hiker://files/rules/xyq/';
-            var opt = {
-                headers: {
-                    'User-Agent': MOBILE_UA,
-                    'Cache-Control': 'no-cache',
-                    Pragma: 'no-cache'
-                },
-                timeout: 20000
-            };
-            function pull(url, check) {
-                try {
-                    var content = fetch(url + '?t=' + Date.now(), opt);
-                    if (content && content.substring(0, 5) != 'error' && check(content)) {
-                        return content;
-                    }
-                } catch (e) {}
-                return '';
-            }
-            for (var i = 0; i < bases.length; i++) {
-                var rulejs = pull(bases[i] + 'hikermovie.js', function (c) {
-                    return c.search(/lazyRule/) != -1;
+    try {
+        var json = JSON.parse(fetch(RULE_JSON, {}));
+        var decText = getMyVar('xyqxqystext', '');
+        d.push({
+            title: '搜索',
+            url: $.toString(() => {
+                var link = 'hiker://empty#noRecordHistory#$$$hiker://files/rules/xyq/hikermovie.json$$$' + input + '$$$fypage$$$';
+                return $(link).rule(() => {
+                    require('hiker://files/rules/xyq/hikermovie.js');
+                    hiksearch();
                 });
-                var rulejson = pull(bases[i] + 'hikermovie.json', function (c) {
-                    return c.search(/\"vodhref\"/) != -1;
+            }),
+            extra: {
+                onChange: "putMyVar('xyqxqystext',input)",
+                defaultValue: decText,
+                titleVisible: true
+            },
+            col_type: 'input'
+        });
+        d.push({
+            title: '聚合搜索',
+            url: $('#noLoading#').lazyRule(() => {
+                var kw = getMyVar('xyqxqystext', '');
+                if (!kw) return 'toast://请先输入关键词';
+                var link = 'hiker://empty#noRecordHistory#$$$hiker://files/rules/xyq/hikermovie.json$$$' + kw + '$$$fypage$$$';
+                return $(link).rule(() => {
+                    require('hiker://files/rules/xyq/hikermovie.js');
+                    hiksearch();
                 });
-                if (rulejs && rulejson) {
-                    writeFile(dir + 'hikermovie.js', rulejs);
-                    writeFile(dir + 'hikermovie.json', rulejson);
+            }),
+            col_type: 'flex_button'
+        });
+        d.push({
+            title: '更新规则',
+            url: $('#noLoading#').lazyRule((bases) => {
+                var dir = 'hiker://files/rules/xyq/';
+                var opt = {
+                    headers: {
+                        'User-Agent': MOBILE_UA,
+                        'Cache-Control': 'no-cache',
+                        Pragma: 'no-cache'
+                    },
+                    timeout: 20000
+                };
+                function pull(url, check) {
                     try {
-                        eval(rulejs);
-                        if (typeof hikerpre == 'function') hikerpre();
-                    } catch (e) {}
-                    refreshPage(false);
-                    return 'toast://更新成功';
+                        var content = fetch(url + '?t=' + Date.now(), opt);
+                        if (content && content.substring(0, 5) != 'error' && check(content)) {
+                            return content;
+                        }
+                    } catch (e) {
+                        logErr('hikhmrule.pull', e);
+                    }
+                    return '';
                 }
+                for (var i = 0; i < bases.length; i++) {
+                    var rulejs = pull(bases[i] + 'hikermovie.js', function (c) {
+                        return c.search(/lazyRule/) != -1;
+                    });
+                    var rulejson = pull(bases[i] + 'hikermovie.json', function (c) {
+                        return c.search(/\"vodhref\"/) != -1;
+                    });
+                    if (rulejs && rulejson) {
+                        writeFile(dir + 'hikermovie.js', rulejs);
+                        writeFile(dir + 'hikermovie.json', rulejson);
+                        try {
+                            eval(rulejs);
+                            if (typeof hikerpre == 'function') hikerpre();
+                        } catch (e) {
+                            logErr('hikhmrule.eval', e);
+                        }
+                        refreshPage(false);
+                        return 'toast://更新成功';
+                    }
+                }
+                return 'toast://更新失败，请检查网络或代理';
+            }, RULE_BASES),
+            col_type: 'flex_button'
+        });
+        for (var i = 0; i < json.data.length; i++) {
+            var tab = json.data[i];
+            for (var k = 0; k < tab.list.length; k++) {
+                var list = tab.list[k];
+                d.push({
+                    title: list.title,
+                    img: list.ico + '@Referer=',
+                    url: 'hiker://empty$$' + list.url + '$$fypage$$' + list.vodtype + '$$' + list.vodhref + '$$',
+                    col_type: 'icon_4_card'
+                });
             }
-            return 'toast://更新失败，请检查网络或代理';
-        }, RULE_BASES),
-        col_type: 'flex_button'
-    });
-    for (var i = 0; i < json.data.length; i++) {
-        var tab = json.data[i];
-        for (var k = 0; k < tab.list.length; k++) {
-            var list = tab.list[k];
-            d.push({
-                title: list.title,
-                img: list.ico + '@Referer=',
-                url: 'hiker://empty$$' + list.url + '$$fypage$$' + list.vodtype + '$$' + list.vodhref + '$$',
-                col_type: 'icon_4_card'
-            });
         }
+    } catch (e) {
+        d.push(errCard('hikhmrule', e));
     }
-
     res.data = d;
     setHomeResult(res);
 }
 function hikhmerj() {
     var res = {};
     var d = [];
-    var parts = MY_URL.split('$$');
-    var spl = parts[1];
-    var pn = parts[2];
-    var vtype = parts[3];
-    var vhref = parts[4];
-
     try {
+        var parts = MY_URL.split('$$');
+        var spl = parts[1];
+        var pn = parts[2];
+        var vtype = parts[3];
+        var vhref = parts[4];
         if (pn == 1) {
             // 先拉首页做指纹匹配，并用来模糊推断分类/搜索 URL
             var html = passHtmlGuard(request(spl, {}), spl, {
@@ -734,9 +766,7 @@ function hikhmerj() {
             fillVodList(d, html, spl, 'movie_3_marquee', engine);
         }
     } catch (e) {
-        try {
-            log('hikhmerj:' + e.message);
-        } catch (e2) {}
+        d.push(errCard('hikhmerj', e));
     }
     res.data = d;
     setHomeResult(res);
@@ -745,11 +775,15 @@ function hikhmerj() {
 function clsrule(engine) {
     var res = {};
     var d = [];
-    var spl = getDomin(MY_URL);
-    var html = passHtmlGuard(getResCode(), MY_URL, { base: spl });
-    var tpl = getTpl(engine || spl, html);
-    refreshX5WebView('');
-    fillVodList(d, html, spl, 'movie_3_marquee', tpl ? tpl.key : engine);
+    try {
+        var spl = getDomin(MY_URL);
+        var html = passHtmlGuard(getResCode(), MY_URL, { base: spl });
+        var tpl = getTpl(engine || spl, html);
+        refreshX5WebView('');
+        fillVodList(d, html, spl, 'movie_3_marquee', tpl ? tpl.key : engine);
+    } catch (e) {
+        d.push(errCard('clsrule', e));
+    }
     res.data = d;
     setHomeResult(res);
 }
@@ -940,6 +974,7 @@ function wwgzFillSearch(d, dom, wd, page, siteTitle) {
 function hiksearch() {
     var res = {};
     var d = [];
+    try {
     var spl = MY_URL.split('$$$');
     var json = JSON.parse(fetch(spl[1], {}));
     for (var i = 0; i < json.data.length; i++) {
@@ -983,6 +1018,7 @@ function hiksearch() {
                             }
                         }
                     } catch (e) {
+                        logErr('hiksearch.batch', e);
                     }
 
                     if (Data.length <= 0) {
@@ -1136,53 +1172,57 @@ function hiksearch() {
             });
         }
     }
+    } catch (e) {
+        d.push(errCard('hiksearch', e));
+    }
     res.data = d;
     setSearchResult(res);
 }
 
 function ssjiex() {
     try {
-        var tkt = param.tit.tit;
-        var dku = param.it.url;
-    } catch (e) {
         var tkt = '';
         var dku = MY_URL;
-    }
-    var kw = '';
-    try {
-        kw = getMyVar('xyqxqystext', '');
-    } catch (e) {}
-    var engKey = (getTpl(spl, html) || {}).key || '';
-    var list = parseListBySite(html, spl, 'search', engKey);
-    if (!list || list.length < 1) {
-        d.push(tipCard(tkt + ' 未找到结果，点击查看原站', dku));
-        return;
-    }
-    var detailFn = (tkt, MOVtitle) => {
-        if (tkt != '') setPageTitle(tkt + '-' + MOVtitle);
-        require('hiker://files/rules/xyq/hikermovie.js');
-        omerj();
-    };
-    for (var i = 0; i < list.length; i++) {
-        var vod = extractVodBySite(list[i], spl, engKey);
-        if (!vod.title) continue;
-        var showTitle = MY_TYPE == 'home' && kw ? vod.title.replace(kw, '「' + kw + '」') : vod.title;
-        var item = {
-            title: vod.img
-                ? (MY_TYPE == 'home' ? (showTitle + ' ' + vod.desc + '\n' + tkt) : (vod.title + ' ' + vod.desc))
-                : showTitle,
-            url: $(vod.url).rule(detailFn, tkt, vod.title),
-            pic_url: vod.img ? imgReferer(vod.img, spl) : '',
-            desc: (vod.img && MY_TYPE != 'home') ? (' ' + tkt) : tkt,
-            col_type: vod.img ? 'movie_1_vertical_pic' : 'text_center_1'
+        try {
+            tkt = param.tit.tit;
+            dku = param.it.url;
+        } catch (e) {}
+        var kw = '';
+        try { kw = getMyVar('xyqxqystext', ''); } catch (e) {}
+        var engKey = (getTpl(spl, html) || {}).key || '';
+        var list = parseListBySite(html, spl, 'search', engKey);
+        if (!list || list.length < 1) {
+            d.push(tipCard(tkt + ' 未找到结果，点击查看原站', dku));
+            return;
+        }
+        var detailFn = (tkt, MOVtitle) => {
+            if (tkt != '') setPageTitle(tkt + '-' + MOVtitle);
+            require('hiker://files/rules/xyq/hikermovie.js');
+            omerj();
         };
-        d.push(item);
+        for (var i = 0; i < list.length; i++) {
+            var vod = extractVodBySite(list[i], spl, engKey);
+            if (!vod.title) continue;
+            var showTitle = MY_TYPE == 'home' && kw ? vod.title.replace(kw, '「' + kw + '」') : vod.title;
+            d.push({
+                title: vod.img
+                    ? (MY_TYPE == 'home' ? (showTitle + ' ' + vod.desc + '\n' + tkt) : (vod.title + ' ' + vod.desc))
+                    : showTitle,
+                url: $(vod.url).rule(detailFn, tkt, vod.title),
+                pic_url: vod.img ? imgReferer(vod.img, spl) : '',
+                desc: (vod.img && MY_TYPE != 'home') ? (' ' + tkt) : tkt,
+                col_type: vod.img ? 'movie_1_vertical_pic' : 'text_center_1'
+            });
+        }
+    } catch (e) {
+        try { d.push(errCard('ssjiex', e)); } catch (e2) { logErr('ssjiex', e); }
     }
 }
 
 function hikseaerji() {
     var res = {};
     var d = [];
+    try {
     var spl = getDomin(MY_URL);
     // 旺旺影视站内搜索不可用，走分类/RSS 关键词检索
     if (/wwgz/.test(spl)) {
@@ -1302,6 +1342,9 @@ function hikseaerji() {
         require('hiker://files/rules/xyq/hikermovie.js');
         ssjiex();
     }
+    } catch (e) {
+        d.push(errCard('hikseaerji', e));
+    }
     res.data = d;
     setHomeResult(res);
 }
@@ -1309,7 +1352,7 @@ function hikseaerji() {
 function omerj() {
     var res = {};
     var d = [];
-
+    try {
     d.push({
         title: '',
         desc: '255&&float',
@@ -1380,6 +1423,9 @@ function omerj() {
                 });
             }
         }
+    }
+    } catch (e) {
+        d.push(errCard('omerj', e));
     }
 
     res.data = d;
@@ -1584,8 +1630,8 @@ function omlazy() {
         if (mm) return playUrl(mm[0] + '#isVideo=true#');
         return x5rule(srcurl, srcurl);
     } catch (e) {
-        log('报错打开原网页');
-        return srcurl
+        logErr('omlazy', e);
+        return srcurl;
     }
 }
 
