@@ -452,7 +452,7 @@ function imgReferer(img, base) {
 function detailRule(url, title) {
     return $(absUrl(url)).rule((MOVtitle) => {
         require('hiker://files/rules/xyq/hikermovie.js');
-        omerj();
+        omerj(MOVtitle);
     }, title);
 }
 
@@ -1201,7 +1201,7 @@ function ssjiex() {
         var detailFn = (tkt, MOVtitle) => {
             if (tkt != '') setPageTitle(tkt + '-' + MOVtitle);
             require('hiker://files/rules/xyq/hikermovie.js');
-            omerj();
+            omerj(MOVtitle);
         };
         for (var i = 0; i < list.length; i++) {
             var vod = extractVodBySite(list[i], spl, engKey);
@@ -1352,10 +1352,16 @@ function hikseaerji() {
     setHomeResult(res);
 }
 
-function omerj() {
+function omerj(movTitle) {
     var res = {};
     var d = [];
     try {
+    if (movTitle == null || movTitle === '') {
+        try { movTitle = MOVtitle; } catch (e) { movTitle = ''; }
+    }
+    if (!movTitle) {
+        try { movTitle = getPageTitle() || ''; } catch (e) { movTitle = ''; }
+    }
     d.push({
         title: '',
         desc: '255&&float',
@@ -1366,7 +1372,7 @@ function omerj() {
     d.push({
         title: JSON.parse(getRule()).title + '搜索',
         desc: '',
-        url: $('hiker://empty#noHistory#$$$' + RULE_JSON + '$$$' + MOVtitle + '$$$fypage$$$').rule(() => {
+        url: $('hiker://empty#noHistory#$$$' + RULE_JSON + '$$$' + movTitle + '$$$fypage$$$').rule(() => {
             require('hiker://files/rules/xyq/hikermovie.js');
             hiksearch();
         }),
