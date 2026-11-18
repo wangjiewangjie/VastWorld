@@ -450,10 +450,10 @@ function imgReferer(img, base) {
 }
 
 function detailRule(url, title) {
-    return $(absUrl(url)).rule((MOVtitle) => {
+    return $(absUrl(url)).rule((t) => {
         require('hiker://files/rules/xyq/hikermovie.js');
-        omerj(MOVtitle);
-    }, title);
+        omerj(t);
+    }, title || '');
 }
 
 function searchLongClick(title) {
@@ -511,9 +511,14 @@ function logErr(tag, e) {
 }
 
 function errCard(tag, e) {
+    var full = logErr(tag, e);
+    var short = '';
+    try {
+        short = (e && (e.message || e.toString())) || '';
+    } catch (e2) {}
     return {
-        title: '规则报错 · ' + tag,
-        desc: logErr(tag, e),
+        title: '规则报错 · ' + tag + (short ? ' · ' + short : ''),
+        desc: full,
         url: 'hiker://empty',
         col_type: 'long_text'
     };
@@ -563,7 +568,7 @@ function passHtmlGuard(html, url, opts) {
         }
     } catch (e) {}
     try {
-        if (html.includes('js=click_html') || html.includes('_guard/auto.js')) {
+        if (html.indexOf('js=click_html') != -1 || html.indexOf('_guard/auto.js') != -1) {
             var point = {
                 x: 616,
                 y: 288,
@@ -592,7 +597,7 @@ function passHtmlGuard(html, url, opts) {
         }
     } catch (e) {}
     try {
-        if (html.includes('请稍等5秒钟左右') && html.includes('提供DDoS防护')) {
+        if (html.indexOf('请稍等5秒钟左右') != -1 && html.indexOf('提供DDoS防护') != -1) {
             eval(pdfh(html, 'head&&script&&Html').split('function')[0]);
             var e = getCookie(url);
             if (null != e) {
@@ -1198,10 +1203,10 @@ function ssjiex() {
             d.push(tipCard(tkt + ' 未找到结果，点击查看原站', dku));
             return;
         }
-        var detailFn = (tkt, MOVtitle) => {
-            if (tkt != '') setPageTitle(tkt + '-' + MOVtitle);
+        var detailFn = (tkt, t) => {
+            if (tkt != '') setPageTitle(tkt + '-' + t);
             require('hiker://files/rules/xyq/hikermovie.js');
-            omerj(MOVtitle);
+            omerj(t);
         };
         for (var i = 0; i < list.length; i++) {
             var vod = extractVodBySite(list[i], spl, engKey);
@@ -1352,87 +1357,126 @@ function hikseaerji() {
     setHomeResult(res);
 }
 
+function reverseList(list) {
+    if (!list || !list.length) return list || [];
+    try {
+        return list.reverse();
+    } catch (e) {
+        var out = [];
+        for (var i = list.length - 1; i >= 0; i--) out.push(list[i]);
+        return out;
+    }
+}
+
 function omerj(movTitle) {
     var res = {};
     var d = [];
     try {
-    if (movTitle == null || movTitle === '') {
-        try { movTitle = MOVtitle; } catch (e) { movTitle = ''; }
-    }
-    if (!movTitle) {
-        try { movTitle = getPageTitle() || ''; } catch (e) { movTitle = ''; }
-    }
-    d.push({
-        title: '',
-        desc: '255&&float',
-        url: '',
-        col_type: 'x5_webview_single'
-    });
-    refreshX5WebView('');
-    d.push({
-        title: JSON.parse(getRule()).title + '搜索',
-        desc: '',
-        url: $('hiker://empty#noHistory#$$$' + RULE_JSON + '$$$' + movTitle + '$$$fypage$$$').rule(() => {
-            require('hiker://files/rules/xyq/hikermovie.js');
-            hiksearch();
-        }),
-        extra: {
-            pageTitle: "搜索"
-        },
-        col_type: 'flex_button'
-    });
-    var omdomin = getDomin(MY_URL);
-    var html = passHtmlGuard(getResCode().replace(/<!--([\S\s]*?)-->/g, ''), MY_URL, {
-        base: omdomin
-    });
-    var eng = resolveTemplate(omdomin, html) || {};
-    var tabs = firstPdfa(html, eng.detailTabs ? eng.detailTabs + '||' + FUZZY_TABS : FUZZY_TABS);
-    var conts = firstPdfa(html, eng.detailConts ? eng.detailConts + '||' + FUZZY_CONTS : FUZZY_CONTS);
-
-    if (conts && conts.length) {
-        for (var i = 0; i < conts.length; i++) {
-            var list = [];
-            if (eng.epLinks) list = pdfa(conts[i], eng.epLinks);
-            else if (/fed-btns-info/.test(conts[i])) list = pdfa(conts[i], 'body&&.fed-btns-info');
-            else if (/<li/.test(conts[i])) list = pdfa(conts[i], 'body&&li');
-            else list = pdfa(conts[i], 'body&&a:not(a:contains(展开全部))');
-            if (!list || !list.length) continue;
-
-            if (eng.reverseEps) list = list.reverse();
-            if (getVar('hikermsort', '1') != '1') list = list.reverse();
-
-            var tabt = '在线播放';
-            if (tabs && tabs[i]) {
-                tabt = pdfh(tabs[i], 'a&&Text||b&&Text||span&&Text||body&&Text') || ('线路' + (i + 1));
-            }
-            d.push({
-                title: tabt + ' 🔗' + [i + 1] + '/' + conts.length + '（点击切换排序）',
-                url: sortToggleRule(),
-                col_type: 'text_1'
-            });
-
-            for (var j = 0; j < list.length; j++) {
-                var title = pdfh(list[j], 'a&&Text||body&&Text');
-                var link = '';
-                try { link = pd(list[j], 'a&&href'); } catch (e) {}
-                if (!link) try { link = pdfh(list[j], 'a&&href||body&&href'); } catch (e2) {}
-                if (!link || /javascript:/i.test(link)) continue;
-                try {
-                    if (title.match(/(第|\d|-)*(集|话|期)/g)) title = title.replace(/第|集|话|期/g, '');
-                } catch (e) {}
-                d.push({
-                    title: title,
-                    url: playLazyRule(omdomin, link, title),
-                    extra: {
-                        blockRules: ['.css', '.gif', '.jpeg', '.png', '.ico', 'cnzz', '.51.la', 'google', 'xn--*:*', 'hm.baidu.com', '/ads/*.js'],
-                        referer: omdomin,
-                        id: 'hiker://empty$$$' + link + '$$$' + title + '$$$' + omdomin
-                    },
-                    col_type: list.length <= 4 ? 'text_2' : ((isNaN(title) && !(title + '').includes('番外')) ? 'flex_button' : 'text_5')
-                });
-            }
+        movTitle = (movTitle == null ? '' : (movTitle + ''));
+        if (!movTitle) {
+            try { movTitle = getPageTitle() || ''; } catch (e) {}
         }
-    }
+
+        d.push({
+            title: '',
+            desc: '255&&float',
+            url: '',
+            col_type: 'x5_webview_single'
+        });
+        try { refreshX5WebView(''); } catch (e) {}
+
+        var ruleTitle = '搜索';
+        try {
+            ruleTitle = (JSON.parse(getRule()).title || '') + '搜索';
+        } catch (e) {}
+        d.push({
+            title: ruleTitle,
+            desc: '',
+            url: $('hiker://empty#noHistory#$$$' + RULE_JSON + '$$$' + movTitle + '$$$fypage$$$').rule(() => {
+                require('hiker://files/rules/xyq/hikermovie.js');
+                hiksearch();
+            }),
+            extra: { pageTitle: '搜索' },
+            col_type: 'flex_button'
+        });
+
+        var omdomin = getDomin(MY_URL);
+        var raw = '';
+        try { raw = getResCode() || ''; } catch (e) { raw = ''; }
+        if (!raw) {
+            try {
+                raw = fetch(MY_URL, {
+                    headers: { 'User-Agent': MOBILE_UA, 'Referer': omdomin + '/' }
+                }) || '';
+            } catch (e) {}
+        }
+        var html = passHtmlGuard(('' + raw).replace(/<!--([\S\s]*?)-->/g, ''), MY_URL, {
+            base: omdomin
+        });
+        var eng = resolveTemplate(omdomin, html) || {};
+        var tabs = firstPdfa(html, eng.detailTabs ? eng.detailTabs + '||' + FUZZY_TABS : FUZZY_TABS);
+        var conts = firstPdfa(html, eng.detailConts ? eng.detailConts + '||' + FUZZY_CONTS : FUZZY_CONTS);
+
+        if (conts && conts.length) {
+            for (var i = 0; i < conts.length; i++) {
+                var list = [];
+                try {
+                    if (eng.epLinks) list = pdfa(conts[i], eng.epLinks);
+                    else if (('' + conts[i]).indexOf('fed-btns-info') != -1) list = pdfa(conts[i], 'body&&.fed-btns-info');
+                    else if (('' + conts[i]).indexOf('<li') != -1) list = pdfa(conts[i], 'body&&li');
+                    else list = pdfa(conts[i], 'body&&a:not(a:contains(展开全部))');
+                } catch (e) { list = []; }
+                if (!list || !list.length) continue;
+
+                if (eng.reverseEps) list = reverseList(list);
+                if (getVar('hikermsort', '1') != '1') list = reverseList(list);
+
+                var tabt = '在线播放';
+                if (tabs && tabs[i]) {
+                    try {
+                        tabt = pdfh(tabs[i], 'a&&Text||b&&Text||span&&Text||body&&Text') || ('线路' + (i + 1));
+                    } catch (e) {
+                        tabt = '线路' + (i + 1);
+                    }
+                }
+                d.push({
+                    title: tabt + ' 🔗' + (i + 1) + '/' + conts.length + '（点击切换排序）',
+                    url: sortToggleRule(),
+                    col_type: 'text_1'
+                });
+
+                for (var j = 0; j < list.length; j++) {
+                    var title = '';
+                    try { title = pdfh(list[j], 'a&&Text||body&&Text') || ''; } catch (e) {}
+                    var link = '';
+                    try { link = pd(list[j], 'a&&href'); } catch (e) {}
+                    if (!link) try { link = pdfh(list[j], 'a&&href||body&&href'); } catch (e2) {}
+                    if (!link || /javascript:/i.test(link)) continue;
+                    try {
+                        if (title && title.match(/(第|\d|-)*(集|话|期)/g)) title = title.replace(/第|集|话|期/g, '');
+                    } catch (e) {}
+                    var clt = 'text_5';
+                    if (list.length <= 4) clt = 'text_2';
+                    else if (isNaN(title) && (title + '').indexOf('番外') < 0) clt = 'flex_button';
+                    d.push({
+                        title: title,
+                        url: playLazyRule(omdomin, link, title),
+                        extra: {
+                            blockRules: ['.css', '.gif', '.jpeg', '.png', '.ico', 'cnzz', '.51.la', 'google', 'xn--*:*', 'hm.baidu.com', '/ads/*.js'],
+                            referer: omdomin,
+                            id: 'hiker://empty$$$' + link + '$$$' + title + '$$$' + omdomin
+                        },
+                        col_type: clt
+                    });
+                }
+            }
+        } else {
+            d.push({
+                title: '未解析到播放列表，可打开原网页',
+                url: MY_URL,
+                col_type: 'text_center_1'
+            });
+        }
     } catch (e) {
         d.push(errCard('omerj', e));
     }
