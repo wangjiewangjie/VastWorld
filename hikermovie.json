@@ -1,69 +1,29 @@
 {
-  "note": "加站只需 url+vodtype+vodhref；模板由 JS 按页面指纹模糊匹配，无需再写 engine",
+  "note": "仅 Omofun动漫 + 樱花动漫；进站用站点 key，播放走海阔 lazyRule",
   "content": "",
-  "version": "17",
+  "version": "20",
   "data": [
-      {
-          "type": "影视",
-          "list": [
-              {
-                  "title": "旺旺影视",
-                  "vodtype": "电影&连续剧&综艺&动漫&短剧&小姐姐&音乐",
-                  "vodhref": "1&2&3&4&26&20&31",
-                  "ico": "",
-                  "url": "https@@vip.wwgz.cn##5200"
-              },
-              {
-                  "title": "Auete影视",
-                  "vodtype": "电影&电视剧&综艺&动漫&其它",
-                  "vodhref": "Movie&Tv&Zy&Dm&qita",
-                  "ico": "",
-                  "url": "https://www.aeete.com"
-              },
-              {
-                  "title": "去看吧",
-                  "vodtype": "高清原碟&日漫&国语动漫&劇場&女频&日韩剧&美漫",
-                  "vodhref": "33&21&20&24&50&43&22",
-                  "ico": "",
-                  "url": "https://qkan8.com"
-              },
-              {
-                  "title": "Omofun动漫",
-                  "vodtype": "日漫&国漫&动画&剧场&特摄&美漫",
-                  "vodhref": "1&2&5&24&4&3",
-                  "ico": "",
-                  "url": "https://www.omofuna.com"
-              },
-              {
-                  "title": "樱花动漫",
-                  "vodtype": "国产动漫&日本动漫&欧美动漫&动漫电影",
-                  "vodhref": "guoman&riman&oman&dmfilm",
-                  "ico": "",
-                  "url": "https://www.vtt6.com"
-              },
-              {
-                  "title": "看戏影视",
-                  "vodtype": "电影&电视剧&综艺&动漫&短剧",
-                  "vodhref": "1&2&3&4&21",
-                  "ico": "",
-                  "url": "https://www.kanxis.com"
-              },
-              {
-                  "title": "AGE动漫",
-                  "vodtype": "日漫&国漫&动画&剧场&特摄&美漫",
-                  "vodhref": "1&2&5&24&4&3",
-                  "ico": "",
-                  "url": "https://www.agebibi.com"
-              },
-              {
-                  "title": "港剧网",
-                  "vodtype": "电影&电视剧&综艺&动漫",
-                  "vodhref": "1&2&3&4",
-                  "ico": "",
-                  "url": "https://www.gangjuwang.tv"
-              }
-          ]
-      }
+    {
+      "type": "动漫",
+      "list": [
+        {
+          "title": "Omofun动漫",
+          "key": "omofun",
+          "vodtype": "日漫&国漫&动画&剧场&特摄&美漫",
+          "vodhref": "1&2&5&24&4&3",
+          "ico": "",
+          "url": "https://www.omofuna.com"
+        },
+        {
+          "title": "樱花动漫",
+          "key": "vtt6",
+          "vodtype": "国产动漫&日本动漫&欧美动漫&动漫电影",
+          "vodhref": "guoman&riman&oman&dmfilm",
+          "ico": "",
+          "url": "https://www.vtt6.com"
+        }
+      ]
+    }
   ],
   "uplink": ""
 }
