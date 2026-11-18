@@ -482,9 +482,10 @@ function imgReferer(img, base) {
 }
 
 function detailRule(url, title) {
-    return $(absUrl(url)).rule((t) => {
-        require('hiker://files/rules/xyq/hikermovie.js');
-        omerj(t);
+    // 必须用 eval(fetch)：与原版一致，MOVtitle 留在同一作用域；require 会丢作用域且可能缓存旧脚本
+    return $(absUrl(url)).rule((MOVtitle) => {
+        eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+        omerj();
     }, title || '');
 }
 
@@ -515,7 +516,7 @@ function sortToggleRule() {
 
 function playLazyRule(omdomin, link, title) {
     return $('hiker://empty$$$' + embedHost(link) + '$$$' + title + '$$$' + embedHost(omdomin)).lazyRule(() => {
-        require('hiker://files/rules/xyq/hikermovie.js');
+        eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
         return omlazy();
     });
 }
@@ -1233,10 +1234,10 @@ function ssjiex() {
             d.push(tipCard(tkt + ' 未找到结果，点击查看原站', dku));
             return;
         }
-        var detailFn = (tkt, t) => {
-            if (tkt != '') setPageTitle(tkt + '-' + t);
-            require('hiker://files/rules/xyq/hikermovie.js');
-            omerj(t);
+        var detailFn = (tkt, MOVtitle) => {
+            if (tkt != '') setPageTitle(tkt + '-' + MOVtitle);
+            eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+            omerj();
         };
         for (var i = 0; i < list.length; i++) {
             var vod = extractVodBySite(list[i], spl, engKey);
@@ -1398,117 +1399,138 @@ function reverseList(list) {
     }
 }
 
-function omerj(movTitle) {
+function omerj() {
     var res = {};
     var d = [];
-    try {
-        movTitle = (movTitle == null ? '' : (movTitle + ''));
-        if (!movTitle) {
-            try { movTitle = getPageTitle() || ''; } catch (e) {}
-        }
+    // 与原版一致：MOVtitle 由 .rule((MOVtitle)=>..., title) + eval(fetch) 注入到同一作用域
+    var movTitle = '';
+    try { movTitle = MOVtitle + ''; } catch (e) { movTitle = ''; }
+    if (!movTitle) {
+        try { movTitle = getPageTitle() || ''; } catch (e) {}
+    }
 
+    try {
         d.push({
             title: '',
             desc: '255&&float',
             url: '',
             col_type: 'x5_webview_single'
         });
-        try { refreshX5WebView(''); } catch (e) {}
+    } catch (e) {}
+    try { refreshX5WebView(''); } catch (e) {}
 
+    try {
         var ruleTitle = '搜索';
-        try {
-            ruleTitle = (JSON.parse(getRule()).title || '') + '搜索';
-        } catch (e) {}
+        try { ruleTitle = (JSON.parse(getRule()).title || '') + '搜索'; } catch (e) {}
         d.push({
             title: ruleTitle,
             desc: '',
             url: $('hiker://empty#noHistory#$$$' + RULE_JSON + '$$$' + movTitle + '$$$fypage$$$').rule(() => {
-                require('hiker://files/rules/xyq/hikermovie.js');
+                eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
                 hiksearch();
             }),
             extra: { pageTitle: '搜索' },
             col_type: 'flex_button'
         });
+    } catch (e) {
+        d.push(errCard('omerj.searchBtn', e));
+    }
 
-        var omdomin = getDomin(MY_URL);
+    var omdomin = '';
+    try { omdomin = getDomin(MY_URL); } catch (e) { omdomin = ''; }
+    if (!omdomin) {
+        try {
+            var mm = (MY_URL + '/').match(/([\S]*?:\/\/[\S]*?)\//);
+            omdomin = mm ? mm[1] : '';
+        } catch (e) {}
+    }
+
+    var html = '';
+    try {
         var raw = '';
-        try { raw = getResCode() || ''; } catch (e) { raw = ''; }
+        try { raw = getResCode() || ''; } catch (e) {}
         if (!raw) {
             try {
                 raw = fetch(MY_URL, {
-                    headers: { 'User-Agent': MOBILE_UA, 'Referer': omdomin + '/' }
+                    headers: { 'User-Agent': MOBILE_UA, 'Referer': (omdomin || MY_URL) + '/' }
                 }) || '';
             } catch (e) {}
         }
-        var html = passHtmlGuard(('' + raw).replace(/<!--([\S\s]*?)-->/g, ''), MY_URL, {
-            base: omdomin
-        });
+        html = passHtmlGuard(('' + raw).replace(/<!--([\S\s]*?)-->/g, ''), MY_URL, { base: omdomin });
+    } catch (e) {
+        d.push(errCard('omerj.html', e));
+    }
+
+    try {
         var eng = resolveTemplate(omdomin, html) || {};
-        var tabs = firstPdfa(html, eng.detailTabs ? eng.detailTabs + '||' + FUZZY_TABS : FUZZY_TABS);
-        var conts = firstPdfa(html, eng.detailConts ? eng.detailConts + '||' + FUZZY_CONTS : FUZZY_CONTS);
+        var tabs = firstPdfa(html, eng.detailTabs ? eng.detailTabs + '||' + FUZZY_TABS : FUZZY_TABS) || [];
+        var conts = firstPdfa(html, eng.detailConts ? eng.detailConts + '||' + FUZZY_CONTS : FUZZY_CONTS) || [];
+        var epCount = 0;
 
-        if (conts && conts.length) {
-            for (var i = 0; i < conts.length; i++) {
-                var list = [];
-                try {
-                    if (eng.epLinks) list = pdfa(conts[i], eng.epLinks);
-                    else if (('' + conts[i]).indexOf('fed-btns-info') != -1) list = pdfa(conts[i], 'body&&.fed-btns-info');
-                    else if (('' + conts[i]).indexOf('<li') != -1) list = pdfa(conts[i], 'body&&li');
-                    else list = pdfa(conts[i], 'body&&a:not(a:contains(展开全部))');
-                } catch (e) { list = []; }
-                if (!list || !list.length) continue;
+        for (var i = 0; i < conts.length; i++) {
+            var list = [];
+            try {
+                if (eng.epLinks) list = pdfa(conts[i], eng.epLinks);
+                else if (('' + conts[i]).indexOf('fed-btns-info') != -1) list = pdfa(conts[i], 'body&&.fed-btns-info');
+                else if (('' + conts[i]).indexOf('<li') != -1) list = pdfa(conts[i], 'body&&li');
+                else list = pdfa(conts[i], 'body&&a:not(a:contains(展开全部))');
+            } catch (e) { list = []; }
+            if (!list || !list.length) continue;
 
-                if (eng.reverseEps) list = reverseList(list);
+            if (eng.reverseEps) list = reverseList(list);
+            try {
                 if (getVar('hikermsort', '1') != '1') list = reverseList(list);
+            } catch (e) {}
 
-                var tabt = '在线播放';
-                if (tabs && tabs[i]) {
-                    try {
-                        tabt = pdfh(tabs[i], 'a&&Text||b&&Text||span&&Text||body&&Text') || ('线路' + (i + 1));
-                    } catch (e) {
-                        tabt = '线路' + (i + 1);
-                    }
-                }
-                d.push({
-                    title: tabt + ' 🔗' + (i + 1) + '/' + conts.length + '（点击切换排序）',
-                    url: sortToggleRule(),
-                    col_type: 'text_1'
-                });
-
-                for (var j = 0; j < list.length; j++) {
-                    var title = '';
-                    try { title = pdfh(list[j], 'a&&Text||body&&Text') || ''; } catch (e) {}
-                    var link = '';
-                    try { link = pd(list[j], 'a&&href'); } catch (e) {}
-                    if (!link) try { link = pdfh(list[j], 'a&&href||body&&href'); } catch (e2) {}
-                    if (!link || /javascript:/i.test(link)) continue;
-                    try {
-                        if (title && title.match(/(第|\d|-)*(集|话|期)/g)) title = title.replace(/第|集|话|期/g, '');
-                    } catch (e) {}
-                    var clt = 'text_5';
-                    if (list.length <= 4) clt = 'text_2';
-                    else if (isNaN(title) && (title + '').indexOf('番外') < 0) clt = 'flex_button';
-                    d.push({
-                        title: title,
-                        url: playLazyRule(omdomin, link, title),
-                        extra: {
-                            blockRules: ['.css', '.gif', '.jpeg', '.png', '.ico', 'cnzz', '.51.la', 'google', 'xn--*:*', 'hm.baidu.com', '/ads/*.js'],
-                            referer: omdomin,
-                            id: 'hiker://empty$$$' + embedHost(link) + '$$$' + title + '$$$' + embedHost(omdomin)
-                        },
-                        col_type: clt
-                    });
-                }
+            var tabt = '在线播放';
+            if (tabs && tabs[i]) {
+                try {
+                    tabt = pdfh(tabs[i], 'a&&Text||b&&Text||span&&Text||body&&Text') || ('线路' + (i + 1));
+                } catch (e) { tabt = '线路' + (i + 1); }
             }
-        } else {
             d.push({
-                title: '未解析到播放列表，可打开原网页',
+                title: tabt + ' #' + (i + 1) + '/' + conts.length + '（点击切换排序）',
+                url: sortToggleRule(),
+                col_type: 'text_1'
+            });
+
+            for (var j = 0; j < list.length; j++) {
+                var title = '';
+                var link = '';
+                try { title = pdfh(list[j], 'a&&Text||body&&Text') || ''; } catch (e) {}
+                try { link = pd(list[j], 'a&&href'); } catch (e) {}
+                if (!link) {
+                    try { link = pdfh(list[j], 'a&&href||body&&href'); } catch (e2) {}
+                }
+                if (!link || /javascript:/i.test(link + '')) continue;
+                try {
+                    if (title && title.match(/(第|\d|-)*(集|话|期)/g)) title = title.replace(/第|集|话|期/g, '');
+                } catch (e) {}
+                var clt = 'text_5';
+                if (list.length <= 4) clt = 'text_2';
+                else if (isNaN(title) && (title + '').indexOf('番外') < 0) clt = 'flex_button';
+                d.push({
+                    title: title,
+                    url: playLazyRule(omdomin, link, title),
+                    extra: {
+                        blockRules: ['.css', '.gif', '.jpeg', '.png', '.ico', 'cnzz', '.51.la', 'google', 'xn--*:*', 'hm.baidu.com', '/ads/*.js'],
+                        referer: omdomin,
+                        id: 'hiker://empty$$$' + embedHost(link) + '$$$' + title + '$$$' + embedHost(omdomin)
+                    },
+                    col_type: clt
+                });
+                epCount++;
+            }
+        }
+        if (epCount < 1) {
+            d.push({
+                title: '未解析到播放列表，打开原网页',
                 url: MY_URL,
                 col_type: 'text_center_1'
             });
         }
     } catch (e) {
-        d.push(errCard('omerj', e));
+        d.push(errCard('omerj.parse', e));
     }
 
     res.data = d;
