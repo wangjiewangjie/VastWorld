@@ -482,7 +482,8 @@ function sortToggleRule() {
 }
 
 function playLazyRule(omdomin, link, title) {
-    return $('hiker://empty$$$' + omdomin + '$$$' + link + '$$$' + title + '$$$').lazyRule(() => {
+    // host 放最后，避免 :port$$$ 被解析成非法端口
+    return $('hiker://empty$$$' + link + '$$$' + title + '$$$' + omdomin).lazyRule(() => {
         require('hiker://files/rules/xyq/hikermovie.js');
         return omlazy();
     });
@@ -718,7 +719,8 @@ function hikhmrule() {
                 d.push({
                     title: list.title,
                     img: list.ico + '@Referer=',
-                    url: 'hiker://empty$$' + list.url + '$$fypage$$' + list.vodtype + '$$' + list.vodhref + '$$',
+                    // 站点 URL 放最后，避免 host:port$$页码 被当成非法端口去请求
+                    url: 'hiker://empty$$fypage$$' + list.vodtype + '$$' + list.vodhref + '$$' + list.url,
                     col_type: 'icon_4_card'
                 });
             }
@@ -733,17 +735,18 @@ function hikhmerj() {
     var res = {};
     var d = [];
     try {
+        // MY_URL: hiker://empty$$页码$$vodtype$$vodhref$$https://host:port
         var parts = MY_URL.split('$$');
-        var spl = parts[1];
-        var pn = parts[2];
-        var vtype = parts[3];
-        var vhref = parts[4];
+        var pn = parts[1];
+        var vtype = parts[2];
+        var vhref = parts[3];
+        var spl = (parts.slice(4).join('$$') || '').replace(/\/$/, '');
         if (pn == 1) {
             // 先拉首页做指纹匹配，并用来模糊推断分类/搜索 URL
             var html = passHtmlGuard(request(spl, {}), spl, {
                 base: spl
             });
-            _homeHtmlCache[(spl || '').replace(/\/$/, '')] = html;
+            _homeHtmlCache[spl] = html;
             var tpl = resolveTemplate(spl, html);
             var engine = tpl ? tpl.key : '';
             var clst = vtype.split('&');
@@ -1417,7 +1420,7 @@ function omerj() {
                     extra: {
                         blockRules: ['.css', '.gif', '.jpeg', '.png', '.ico', 'cnzz', '.51.la', 'google', 'xn--*:*', 'hm.baidu.com', '/ads/*.js'],
                         referer: omdomin,
-                        id: 'hiker://empty$$$' + omdomin + '$$$' + link + '$$$' + title + '$$$'
+                        id: 'hiker://empty$$$' + link + '$$$' + title + '$$$' + omdomin
                     },
                     col_type: list.length <= 4 ? 'text_2' : ((isNaN(title) && !(title + '').includes('番外')) ? 'flex_button' : 'text_5')
                 });
@@ -1433,8 +1436,17 @@ function omerj() {
 }
 
 function omlazy() {
-    var myurl = input.split('$$$')[1];
-    var srcurl = input.split('$$$')[2];
+    // 新: empty$$$playUrl$$$title$$$host  旧: empty$$$host$$$playUrl$$$title
+    var _p = input.split('$$$');
+    var srcurl = '';
+    var myurl = '';
+    if (/^https?:/i.test(_p[2] || '')) {
+        myurl = (_p[1] || '').replace(/\/$/, '');
+        srcurl = _p[2] || '';
+    } else {
+        srcurl = _p[1] || '';
+        myurl = (_p.slice(3).join('$$$') || '').replace(/\/$/, '');
+    }
     try {
         function playUrl(urls) {
             if (!urls || urls.indexOf('index.m3u8') < 0 || urls.indexOf('"urls"') >= 0) return urls;
