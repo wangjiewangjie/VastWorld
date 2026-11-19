@@ -1,7 +1,7 @@
 var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/xyq/";
-var RULE_VER = "v22-anime4";
+var RULE_VER = "v22-anime5";
 var RULE_LAN = "http://192.168.3.222:8765/";
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
@@ -37,7 +37,7 @@ function isCurrentVer(js) {
     js.indexOf(RULE_VER) != -1 &&
     js.indexOf("lazyRule") != -1 &&
     js.length < 45000 &&
-    !/旺旺影视|gangjuwang|wwgz\.cn/.test(js)
+    !/(wwgz\.cn|gangjuwang)/.test(js)
   );
 }
 
@@ -83,7 +83,7 @@ function buildUpdateItem() {
             rulejs.indexOf(ver) >= 0 &&
             rulejs.indexOf("pageNum") >= 0 &&
             rulejs.length < 45000 &&
-            !/旺旺影视|gangjuwang|wwgz\.cn/.test(rulejs);
+            !/(wwgz\.cn|gangjuwang)/.test(rulejs);
           var jnOk = rulejson.indexOf("vodhref") >= 0;
           logs.push(i + 1 + ":" + (rulejs ? rulejs.length : 0) + (jsOk ? "+js" : "") + (jnOk ? "+json" : ""));
           if (!jsOk || !jnOk) continue;
