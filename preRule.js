@@ -5,8 +5,8 @@ var RULE_VER = "v22-anime3";
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
 var RULE_BASES = [
-  "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/",
   "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/",
+  "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/",
   "https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
   "https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
 ];
