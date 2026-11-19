@@ -1,9 +1,11 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime3'; // v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime4'; // v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
+var RULE_LAN = 'http://192.168.3.222:8765/';
 var RULE_BASES = [
+    RULE_LAN,
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/',
     'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
@@ -235,6 +237,36 @@ function omofunCookie(host, probe) {
     }
 }
 
+// ---------- 更新 ----------
+function tryUpdateFrom(bases, ver) {
+    var dir = 'hiker://files/rules/xyq/';
+    var opt = { headers: { 'User-Agent': MOBILE_UA, 'Cache-Control': 'no-cache', Pragma: 'no-cache' }, timeout: 6000 };
+    var logs = [];
+    for (var i = 0; i < bases.length; i++) {
+        try {
+            var js = fetch(bases[i] + 'hikermovie.js?t=' + Date.now(), opt) || '';
+            var jn = fetch(bases[i] + 'hikermovie.json?t=' + Date.now(), opt) || '';
+            if (js.substring(0, 5) == 'error') js = '';
+            if (jn.substring(0, 5) == 'error') jn = '';
+            // 兼容旧版 updater：注释里仍保留历史版本字样
+            var jsOk = js && js.indexOf(ver) >= 0 && js.indexOf('pageNum') >= 0 && js.length < 45000 && !/旺旺影视|wwgz\.cn/.test(js);
+            var jnOk = jn && jn.indexOf('vodhref') >= 0;
+            var tag = bases[i].indexOf('192.168.') >= 0 ? 'lan' : (bases[i].indexOf('gitee') >= 0 ? 'gitee' : (bases[i].indexOf('ghfast') >= 0 ? 'ghfast' : 'gh'));
+            logs.push(tag + ':' + (js ? js.length : 0) + (jsOk ? '+js' : '') + (jnOk ? '+json' : ''));
+            if (!jsOk || !jnOk) continue;
+            writeFile(dir + 'hikermovie.js', js);
+            writeFile(dir + 'hikermovie.json', jn);
+            var check = fetch(dir + 'hikermovie.js') || '';
+            if (check.indexOf(ver) < 0) return 'toast://写入校验失败';
+            refreshPage(false);
+            return 'toast://已更新 ' + ver + ' ←' + tag + ' (' + js.length + 'B)';
+        } catch (e) {
+            logs.push('err');
+        }
+    }
+    return 'toast://更新失败 ' + ver + ' · ' + logs.join(' | ');
+}
+
 // ---------- 首页 ----------
 function hikhmrule() {
     var res = { data: [] };
@@ -272,29 +304,17 @@ function hikhmrule() {
         d.push({
             title: '更新规则',
             url: $('#noLoading#').lazyRule((bases, ver) => {
-                var dir = 'hiker://files/rules/xyq/';
-                var opt = { headers: { 'User-Agent': MOBILE_UA, 'Cache-Control': 'no-cache' }, timeout: 8000 };
-                var logs = [];
-                for (var i = 0; i < bases.length; i++) {
-                    try {
-                        var js = fetch(bases[i] + 'hikermovie.js?t=' + Date.now(), opt) || '';
-                        var jn = fetch(bases[i] + 'hikermovie.json?t=' + Date.now(), opt) || '';
-                        var jsOk = js && js.indexOf(ver) >= 0 && js.indexOf('pageNum') >= 0 && js.length < 45000 && !/旺旺影视|wwgz\.cn/.test(js);
-                        var jnOk = jn && jn.indexOf('vodhref') >= 0;
-                        logs.push((i + 1) + ':' + (js ? js.length : 0) + (jsOk ? '+js' : '') + (jnOk ? '+json' : ''));
-                        if (!jsOk || !jnOk) continue;
-                        writeFile(dir + 'hikermovie.js', js);
-                        writeFile(dir + 'hikermovie.json', jn);
-                        var check = fetch(dir + 'hikermovie.js') || '';
-                        if (check.indexOf(ver) < 0) return 'toast://写入校验失败';
-                        refreshPage(false);
-                        return 'toast://已更新 ' + ver + ' (' + js.length + 'B)';
-                    } catch (e) {
-                        logs.push((i + 1) + ':err');
-                    }
-                }
-                return 'toast://更新失败 ' + ver + ' · ' + logs.join(' | ') + ' · 可开电脑 8765 或重装预处理';
+                eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                return tryUpdateFrom(bases, ver);
             }, RULE_BASES, RULE_VER),
+            col_type: 'flex_button'
+        });
+        d.push({
+            title: '局域网更新',
+            url: $('#noLoading#').lazyRule((lan, ver) => {
+                eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                return tryUpdateFrom([lan], ver);
+            }, RULE_LAN, RULE_VER),
             col_type: 'flex_button'
         });
         d.push({ col_type: 'line' });

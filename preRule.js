@@ -1,10 +1,12 @@
 var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/xyq/";
-var RULE_VER = "v22-anime3";
+var RULE_VER = "v22-anime4";
+var RULE_LAN = "http://192.168.3.222:8765/";
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
 var RULE_BASES = [
+  RULE_LAN,
   "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/",
   "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/",
   "https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
