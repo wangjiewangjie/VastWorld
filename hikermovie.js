@@ -1,7 +1,7 @@
-﻿// hikermovie v21 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
+﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
-// 兼容旧「更新规则」仍在找 v20-anime2 字样
-var RULE_VER = 'v21-anime2'; // v20-anime2
+// 兼容旧「更新规则」仍在找旧版本字样
+var RULE_VER = 'v22-anime3'; // v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/',
@@ -65,8 +65,16 @@ function fillTpl(tpl, vars) {
 
 function absUrl(url, base) {
     if (!url) return '';
-    if (/^https?:/i.test(url) || url.indexOf('hiker') == 0) return url;
-    return (base || '') + url;
+    // 站点页 MY_URL 常为 hiker://empty，pd() 会拼出脏链接，这里一律丢掉
+    if (/^hiker:/i.test(url)) return '';
+    if (/^https?:/i.test(url)) return url;
+    if (url.indexOf('//') == 0) return 'https:' + url;
+    base = base || '';
+    if (url.charAt(0) == '/') {
+        var m = (base + '/').match(/^(https?:\/\/[^\/]+)/i);
+        return (m ? m[1] : base.replace(/\/$/, '')) + url;
+    }
+    return base.replace(/\/?$/, '/') + url;
 }
 
 function imgUrl(img, host) {
@@ -149,19 +157,19 @@ function parseList(html, site, host) {
         var title = firstPdfh(items[i], site.title);
         var img = firstPdfh(items[i], site.img);
         var desc = firstPdfh(items[i], site.desc);
-        var href = '';
-        try { href = pd(items[i], site.url.split('||')[0]); } catch (e) {}
-        if (!href) href = firstPdfh(items[i], site.url);
+        // 不用 pd()：站点首页 MY_URL=hiker://empty 时 pd 会把 /anime/x 拼成脏地址
+        var href = firstPdfh(items[i], site.url);
         if (!href || /javascript:/i.test(href)) continue;
         if (!title) continue;
-        // 丢掉导航分类链（保留 /detail/ /anime/ /play/）
         var full = absUrl(href, host);
+        if (!full || !/^https?:/i.test(full)) continue;
+        // 丢掉导航分类链（保留 /detail/ /anime/ /play/）
         if (/\/(type|show|label|mangatype|arttype)\//i.test(full) && !/\/(detail|anime|video|vod|play)\//i.test(full)) continue;
         out.push({
             title: title,
             img: absUrl(img, host),
             desc: desc,
-            url: absUrl(href, host)
+            url: full
         });
     }
     return out;
@@ -174,10 +182,11 @@ function pushCards(d, list, host, col) {
             title: v.title,
             desc: v.desc || '',
             pic_url: v.img ? imgUrl(v.img, host) : '',
-            url: $(v.url).rule((name) => {
+            // 显式传入详情 URL：站点首页 MY_URL=hiker://empty 时，单靠 getResCode/MY_URL 会解析失败
+            url: $(v.url + '#noHistory#').rule((name, detailUrl) => {
                 eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
-                omerj(name);
-            }, v.title),
+                omerj(name, detailUrl);
+            }, v.title, v.url),
             col_type: v.img ? (col || 'movie_3_marquee') : 'text_center_1',
             extra: { key: v.title }
         });
@@ -414,7 +423,7 @@ function playLazy(host, link, title, playType) {
     });
 }
 
-function omerj(movTitle) {
+function omerj(movTitle, detailUrl) {
     var res = { data: [] };
     var d = res.data;
     try {
@@ -434,26 +443,44 @@ function omerj(movTitle) {
             extra: { pageTitle: '搜索' }
         });
 
+        // 优先用 pushCards 传入的真实详情链；MY_URL 在站点首页入口常为 hiker://empty
+        var pageUrl = '';
+        try {
+            pageUrl = (detailUrl || '').replace(/#noHistory#.*$/, '').replace(/#.*$/, '');
+        } catch (e) { pageUrl = detailUrl || ''; }
+        if (!/^https?:/i.test(pageUrl)) {
+            try { pageUrl = (MY_URL || '').replace(/#noHistory#.*$/, '').replace(/#.*$/, ''); } catch (e2) { pageUrl = ''; }
+        }
+        if (!/^https?:/i.test(pageUrl)) pageUrl = '';
+
         var host = '';
         try {
-            var m = (MY_URL + '/').match(/([\S]*?:\/\/[\S]*?)\//);
+            var m = (pageUrl + '/').match(/(https?:\/\/[^\/\s]+)/i);
             host = m ? m[1] : '';
         } catch (e) {}
-        var site = /omofuna|omofun/i.test(host) ? SITES.omofun : (/vtt6/i.test(host) ? SITES.vtt6 : null);
+        var site = /omofuna|omofun/i.test(host + pageUrl) ? SITES.omofun : (/vtt6/i.test(host + pageUrl) ? SITES.vtt6 : null);
         if (!site) {
-            // 按 host 匹配
             for (var k in SITES) {
-                if (host.indexOf(SITES[k].host.replace(/^https?:\/\//, '')) != -1) {
+                if (host && host.indexOf(SITES[k].host.replace(/^https?:\/\//, '')) != -1) {
                     site = SITES[k];
                     break;
                 }
             }
         }
         if (!site) site = SITES.omofun;
+        if (!host) host = site.host;
 
+        // 有真实详情 URL 时直接抓，不信任从 hiker://empty 父页带过来的 getResCode
         var html = '';
-        try { html = (getResCode() || '').replace(/<!--([\S\s]*?)-->/g, ''); } catch (e) {}
-        if (!html) html = fetchPage(MY_URL, host);
+        if (pageUrl) html = fetchPage(pageUrl, host) || '';
+        if (!html || html.length < 800 || !/(play-list|playlist|player_aaaa|channel-tab)/i.test(html)) {
+            try {
+                var gr = (getResCode() || '').replace(/<!--([\S\s]*?)-->/g, '');
+                if (gr && gr.length > html.length) html = gr;
+            } catch (e) {}
+            if (pageUrl && (!html || html.length < 800)) html = fetchPage(pageUrl, host) || html;
+        }
+        try { html = (html || '').replace(/<!--([\S\s]*?)-->/g, ''); } catch (e) {}
 
         var tabs = firstPdfa(html, site.tabs);
         var conts = firstPdfa(html, site.conts);
@@ -480,10 +507,11 @@ function omerj(movTitle) {
                 var t = '';
                 var link = '';
                 try { t = pdfh(list[j], 'a&&Text||body&&Text') || ''; } catch (e) {}
-                try { link = pd(list[j], 'a&&href'); } catch (e) {}
-                if (!link) try { link = pdfh(list[j], 'a&&href'); } catch (e) {}
+                // 不用 pd()，避免脏 MY_URL 污染播放链
+                try { link = pdfh(list[j], 'a&&href'); } catch (e) {}
                 if (!link || /javascript:/i.test(link)) continue;
                 link = absUrl(link, host);
+                if (!link || !/^https?:/i.test(link)) continue;
                 try {
                     if (t && t.match(/(第|\d|-)*(集|话|期)/g)) t = t.replace(/第|集|话|期/g, '');
                 } catch (e) {}
@@ -501,7 +529,11 @@ function omerj(movTitle) {
             }
         }
         if (!ep) {
-            d.push({ title: '未解析到选集，打开原网页', url: MY_URL, col_type: 'text_center_1' });
+            d.push({
+                title: '未解析到选集，打开原网页',
+                url: pageUrl || host + '/',
+                col_type: 'text_center_1'
+            });
         }
     } catch (e) {
         d.push(errItem('detail', e));
@@ -659,10 +691,10 @@ function hiksearch() {
                             title: v.title.replace(wd, '「' + wd + '」') + '\n' + s.title,
                             desc: v.desc || '',
                             pic_url: v.img ? imgUrl(v.img, site.host) : '',
-                            url: $(v.url).rule((name) => {
+                            url: $(v.url + '#noHistory#').rule((name, detailUrl) => {
                                 eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
-                                omerj(name);
-                            }, v.title),
+                                omerj(name, detailUrl);
+                            }, v.title, v.url),
                             col_type: v.img ? 'movie_1_vertical_pic' : 'text_center_1'
                         });
                     }
@@ -723,10 +755,10 @@ function hikseaerji(cktitle, key, wd) {
                     d.push({
                         title: show + (v.desc ? ' ' + v.desc : ''),
                         pic_url: v.img ? imgUrl(v.img, host) : '',
-                        url: $(v.url).rule((name) => {
+                        url: $(v.url + '#noHistory#').rule((name, detailUrl) => {
                             eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
-                            omerj(name);
-                        }, v.title),
+                            omerj(name, detailUrl);
+                        }, v.title, v.url),
                         col_type: v.img ? 'movie_1_vertical_pic' : 'text_center_1'
                     });
                 }
