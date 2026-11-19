@@ -262,23 +262,27 @@ function hikhmrule() {
             title: '更新规则',
             url: $('#noLoading#').lazyRule((bases, ver) => {
                 var dir = 'hiker://files/rules/xyq/';
-                var opt = { headers: { 'User-Agent': MOBILE_UA, 'Cache-Control': 'no-cache' }, timeout: 20000 };
+                var opt = { headers: { 'User-Agent': MOBILE_UA, 'Cache-Control': 'no-cache' }, timeout: 8000 };
+                var logs = [];
                 for (var i = 0; i < bases.length; i++) {
                     try {
                         var js = fetch(bases[i] + 'hikermovie.js?t=' + Date.now(), opt) || '';
                         var jn = fetch(bases[i] + 'hikermovie.json?t=' + Date.now(), opt) || '';
-                        // 必须含版本号；拒绝明显过大的旧包
-                        if (js.indexOf(ver) < 0 || jn.indexOf('vodhref') < 0) continue;
-                        if (js.length > 45000 || /旺旺影视|gangjuwang|wwgz\.cn/.test(js)) continue;
+                        var jsOk = js && js.indexOf(ver) >= 0 && js.indexOf('pageNum') >= 0 && js.length < 45000 && !/旺旺影视|wwgz\.cn/.test(js);
+                        var jnOk = jn && jn.indexOf('vodhref') >= 0;
+                        logs.push((i + 1) + ':' + (js ? js.length : 0) + (jsOk ? '+js' : '') + (jnOk ? '+json' : ''));
+                        if (!jsOk || !jnOk) continue;
                         writeFile(dir + 'hikermovie.js', js);
                         writeFile(dir + 'hikermovie.json', jn);
                         var check = fetch(dir + 'hikermovie.js') || '';
                         if (check.indexOf(ver) < 0) return 'toast://写入校验失败';
                         refreshPage(false);
                         return 'toast://已更新 ' + ver + ' (' + js.length + 'B)';
-                    } catch (e) {}
+                    } catch (e) {
+                        logs.push((i + 1) + ':err');
+                    }
                 }
-                return 'toast://更新失败：未能拉到 ' + ver + '（勿用 jsDelivr 缓存）';
+                return 'toast://更新失败 ' + ver + ' · ' + logs.join(' | ') + ' · 可开电脑 8765 或重装预处理';
             }, RULE_BASES, RULE_VER),
             col_type: 'flex_button'
         });
