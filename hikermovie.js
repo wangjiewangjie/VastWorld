@@ -1,6 +1,7 @@
 ﻿// hikermovie v21 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
-var RULE_VER = 'v21-anime2';
+// 兼容旧「更新规则」仍在找 v20-anime2 字样
+var RULE_VER = 'v21-anime2'; // v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
