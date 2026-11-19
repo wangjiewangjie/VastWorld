@@ -5,9 +5,10 @@ var RULE_VER = "v21-anime2";
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
 var RULE_BASES = [
+  "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/",
+  "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/",
   "https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
   "https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
-  "http://192.168.3.222:8765/",
 ];
 
 var FETCH_OPT = {
