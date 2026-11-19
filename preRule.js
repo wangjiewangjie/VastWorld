@@ -5,9 +5,9 @@ var RULE_VER = "v21-anime2";
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
 var RULE_BASES = [
-  "http://192.168.3.222:8765/",
   "https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
   "https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
+  "http://192.168.3.222:8765/",
 ];
 
 var FETCH_OPT = {
@@ -64,32 +64,37 @@ function buildUpdateItem() {
   return {
     title: "更新规则",
     url: $("#noLoading#").lazyRule(() => {
-      var bases = [
-        "https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
-        "https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/",
-      ];
-      var dir = "hiker://files/rules/xyq/";
-      var ver = "v20-anime2";
+      var bases = RULE_BASES.slice(0);
+      var dir = RULE_DIR;
+      var ver = RULE_VER;
       var opt = {
         headers: { "User-Agent": MOBILE_UA, "Cache-Control": "no-cache", Pragma: "no-cache" },
-        timeout: 20000,
+        timeout: 8000,
       };
+      var logs = [];
       for (var i = 0; i < bases.length; i++) {
         try {
           var rulejs = fetch(bases[i] + "hikermovie.js?t=" + Date.now(), opt) || "";
           var rulejson = fetch(bases[i] + "hikermovie.json?t=" + Date.now(), opt) || "";
-          if (rulejs.indexOf(ver) < 0 || rulejs.length > 45000) continue;
-          if (/旺旺影视|gangjuwang|wwgz\.cn/.test(rulejs)) continue;
-          if (rulejson.indexOf("vodhref") < 0) continue;
+          var jsOk =
+            rulejs.indexOf(ver) >= 0 &&
+            rulejs.indexOf("pageNum") >= 0 &&
+            rulejs.length < 45000 &&
+            !/旺旺影视|gangjuwang|wwgz\.cn/.test(rulejs);
+          var jnOk = rulejson.indexOf("vodhref") >= 0;
+          logs.push(i + 1 + ":" + (rulejs ? rulejs.length : 0) + (jsOk ? "+js" : "") + (jnOk ? "+json" : ""));
+          if (!jsOk || !jnOk) continue;
           writeFile(dir + "hikermovie.js", rulejs);
           writeFile(dir + "hikermovie.json", rulejson);
           var check = fetch(dir + "hikermovie.js") || "";
           if (check.indexOf(ver) < 0) return "toast://写入校验失败";
           refreshPage(false);
           return "toast://已更新 " + ver + " (" + rulejs.length + "B)";
-        } catch (e) {}
+        } catch (e) {
+          logs.push(i + 1 + ":err");
+        }
       }
-      return "toast://更新失败：请手动覆盖桌面 hikermovie.js（勿用 jsDelivr）";
+      return "toast://更新失败 " + ver + " · " + logs.join(" | ");
     }),
     col_type: "flex_button",
   };
