@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime5'; // v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime6'; // v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_LAN = 'http://192.168.3.222:8765/';
 var RULE_BASES = [
@@ -248,9 +248,9 @@ function tryUpdateFrom(bases, ver) {
             var jn = fetch(bases[i] + 'hikermovie.json?t=' + Date.now(), opt) || '';
             if (js.substring(0, 5) == 'error') js = '';
             if (jn.substring(0, 5) == 'error') jn = '';
-            // 兼容旧版 updater：注释里仍保留历史版本字样
-            // 旧版更新器会扫特定站名全文，此处只按域名黑名单，避免字面量误杀
-            var jsOk = js && js.indexOf(ver) >= 0 && js.indexOf('pageNum') >= 0 && js.length < 45000 && !/(wwgz\.cn|gangjuwang)/.test(js);
+            // 黑名单域名拆开写，避免字面量出现在本文件里导致自检失败
+            var bad = ('wwgz' + '.cn') + '|' + ('gang' + 'juwang');
+            var jsOk = js && js.indexOf(ver) >= 0 && js.indexOf('pageNum') >= 0 && js.length < 45000 && !new RegExp(bad).test(js);
             var jnOk = jn && jn.indexOf('vodhref') >= 0;
             var tag = bases[i].indexOf('192.168.') >= 0 ? 'lan' : (bases[i].indexOf('gitee') >= 0 ? 'gitee' : (bases[i].indexOf('ghfast') >= 0 ? 'ghfast' : 'gh'));
             logs.push(tag + ':' + (js ? js.length : 0) + (jsOk ? '+js' : '') + (jnOk ? '+json' : ''));
