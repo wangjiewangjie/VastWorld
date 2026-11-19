@@ -11,7 +11,7 @@
           "key": "omofun",
           "vodtype": "日漫&国漫&动画&剧场&特摄&美漫",
           "vodhref": "1&2&5&24&4&3",
-          "ico": "",
+          "ico": "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/icons/omofun.jpg",
           "url": "https://www.omofuna.com"
         },
         {
@@ -19,7 +19,7 @@
           "key": "vtt6",
           "vodtype": "国产动漫&日本动漫&欧美动漫&动漫电影",
           "vodhref": "guoman&riman&oman&dmfilm",
-          "ico": "",
+          "ico": "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/icons/vtt6.jpg",
           "url": "https://www.vtt6.com"
         }
       ]
