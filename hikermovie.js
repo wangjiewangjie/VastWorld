@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime12'; // v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime13'; // v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -156,6 +156,20 @@ function cleanHttpUrl(u) {
     if (!u) return '';
     u = (u + '').split(';')[0].replace(/#noHistory#.*$/i, '').replace(/#noRecordHistory#.*$/i, '').replace(/#.*$/, '');
     return /^https?:/i.test(u) ? u : '';
+}
+
+// 打开验证页：lazyRule 返回 https，比 web:// / 空链更稳
+function verifyOpenItem(title, u, col) {
+    var link = cleanHttpUrl(u);
+    return {
+        title: title || '需要验证，点此打开网页',
+        url: link
+            ? $('hiker://empty#noLoading#').lazyRule((href) => {
+                return href;
+            }, link)
+            : 'hiker://empty',
+        col_type: col || 'text_center_1'
+    };
 }
 
 function parseList(html, site, host) {
@@ -713,7 +727,7 @@ function hikAggSearch(sitesJson, wd) {
                 if (/系统安全验证|因访问过多/.test(html || '')) {
                     d.push({
                         title: s.title + ' 需验证，点此打开网页',
-                        url: 'web://' + url,
+                        url: verifyOpenUrl(url),
                         col_type: 'text_1'
                     });
                     continue;
@@ -768,18 +782,18 @@ function hikseaerji(cktitle, key, wd) {
         var html = '';
         try { html = getResCode() || ''; } catch (e) {}
 
+        var pageUrl = cleanHttpUrl(MY_URL) || (host + '/');
         if (site.needCookie && /系统安全验证|因访问过多|继续访问/.test(html)) {
-            var cok = omofunCookie(host, MY_URL);
+            var cok = omofunCookie(host, pageUrl);
             if (cok) {
                 writeFile(COOKIE_DIR + (cktitle || site.title) + 'cookie.txt', cok);
-                html = fetchPage(MY_URL, host, cok);
+                html = fetchPage(pageUrl, host, cok);
             }
         }
         if (/系统安全验证|因访问过多|请输入验证码/.test(html || '')) {
-            var openUrl = cleanHttpUrl(MY_URL) || (host + '/');
             d.push({
                 title: '需要验证，点此打开网页完成',
-                url: 'web://' + openUrl,
+                url: verifyOpenUrl(pageUrl),
                 col_type: 'text_center_1'
             });
             d.push({
@@ -787,14 +801,14 @@ function hikseaerji(cktitle, key, wd) {
                 url: $('hiker://empty#noLoading#').lazyRule((h, ckName, probe) => {
                     eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
                     try {
-                        var cok = '';
-                        try { cok = getCookie(h) || ''; } catch (e1) {}
-                        if (!cok) cok = omofunCookie(h, probe) || '';
-                        if (cok) writeFile(COOKIE_DIR + ckName + 'cookie.txt', cok);
+                        var cok2 = '';
+                        try { cok2 = getCookie(h) || ''; } catch (e1) {}
+                        if (!cok2) cok2 = omofunCookie(h, probe) || '';
+                        if (cok2) writeFile(COOKIE_DIR + ckName + 'cookie.txt', cok2);
                     } catch (e2) {}
                     refreshPage(false);
                     return 'hiker://empty';
-                }, host, cktitle || site.title, openUrl),
+                }, host, cktitle || site.title, pageUrl),
                 col_type: 'text_center_1'
             });
         } else {
