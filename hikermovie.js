@@ -660,7 +660,7 @@ function hiksearch() {
         // 聚合改为二级页 .rule()，避免搜索页 lazyRule 空链接
         d.push({
             title: '开始聚合搜索',
-            url: $('hiker://empty#noRecordHistory#').rule((sitesJson, keyWd) => {
+            url: $('hiker://empty#noRecordHistory#noLoading#').rule((sitesJson, keyWd) => {
                 eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
                 hikAggSearch(sitesJson, keyWd);
             }, JSON.stringify(sites), wd),
@@ -669,7 +669,8 @@ function hiksearch() {
     } catch (e) {
         d.push(errItem('search', e));
     }
-    setSearchResult(res);
+    // 首页输入框 .rule 打开的是二级页，必须 setHomeResult；setSearchResult 会导致一直转圈
+    setHomeResult(res);
 }
 
 function hikAggSearch(sitesJson, wd) {
@@ -688,43 +689,46 @@ function hikAggSearch(sitesJson, wd) {
         }
         var hit = 0;
         for (var i = 0; i < sites.length; i++) {
-            var s = sites[i];
-            var key = s.key || (/omo/i.test(s.url || '') ? 'omofun' : 'vtt6');
-            var site = getSite(key);
-            if (!site) continue;
-            var url = fillTpl(site.search, {
-                host: site.host, wd: wd, ewd: encodeURIComponent(wd)
-            }).replace(/fypage/g, '1');
-            var cookie = '';
-            if (site.needCookie) {
-                cookie = omofunCookie(site.host, url);
-                if (cookie) writeFile(COOKIE_DIR + s.title + 'cookie.txt', cookie);
-                else cookie = fetch(COOKIE_DIR + s.title + 'cookie.txt', {}) || '';
-            }
-            var html = fetchPage(url, site.host, cookie);
-            if (/系统安全验证|因访问过多/.test(html || '')) {
-                d.push({ title: s.title + ' 需验证', url: url, col_type: 'text_1' });
-                continue;
-            }
-            var list = parseList(html, site, site.host);
-            if (!list.length) {
-                d.push({ title: s.title + ' 无结果', url: url, col_type: 'text_1' });
-                continue;
-            }
-            d.push({ title: '—— ' + s.title + ' · ' + list.length + ' ——', url: 'hiker://empty', col_type: 'text_1' });
-            for (var j = 0; j < list.length; j++) {
-                var v = list[j];
-                d.push({
-                    title: (wd ? v.title.replace(wd, '「' + wd + '」') : v.title),
-                    desc: v.desc || '',
-                    pic_url: v.img ? imgUrl(v.img, site.host) : '',
-                    url: $(v.url + '#noHistory#').rule((name, detailUrl) => {
-                        eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
-                        omerj(name, detailUrl);
-                    }, v.title, v.url),
-                    col_type: v.img ? 'movie_1_vertical_pic' : 'text_center_1'
-                });
-                hit++;
+            try {
+                var s = sites[i];
+                var key = s.key || (/omo/i.test(s.url || '') ? 'omofun' : 'vtt6');
+                var site = getSite(key);
+                if (!site) continue;
+                var url = fillTpl(site.search, {
+                    host: site.host, wd: wd, ewd: encodeURIComponent(wd)
+                }).replace(/fypage/g, '1');
+                // 聚合不跑 omofunCookie（易卡死），只用本地已存 cookie
+                var cookie = '';
+                try {
+                    if (site.needCookie) cookie = fetch(COOKIE_DIR + s.title + 'cookie.txt', {}) || '';
+                } catch (e2) {}
+                var html = fetchPage(url, site.host, cookie);
+                if (/系统安全验证|因访问过多/.test(html || '')) {
+                    d.push({ title: s.title + ' 需验证，请点上方站点进入', url: 'hiker://empty', col_type: 'text_1' });
+                    continue;
+                }
+                var list = parseList(html, site, site.host);
+                if (!list.length) {
+                    d.push({ title: s.title + ' 无结果', url: url, col_type: 'text_1' });
+                    continue;
+                }
+                d.push({ title: '—— ' + s.title + ' · ' + list.length + ' ——', url: 'hiker://empty', col_type: 'text_1' });
+                for (var j = 0; j < list.length; j++) {
+                    var v = list[j];
+                    d.push({
+                        title: (wd ? v.title.replace(wd, '「' + wd + '」') : v.title),
+                        desc: v.desc || '',
+                        pic_url: v.img ? imgUrl(v.img, site.host) : '',
+                        url: $(v.url + '#noHistory#').rule((name, detailUrl) => {
+                            eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                            omerj(name, detailUrl);
+                        }, v.title, v.url),
+                        col_type: v.img ? 'movie_1_vertical_pic' : 'text_center_1'
+                    });
+                    hit++;
+                }
+            } catch (eSite) {
+                d.push({ title: (sites[i] && sites[i].title ? sites[i].title : '站点') + ' 失败', url: 'hiker://empty', col_type: 'text_1' });
             }
         }
         if (!hit) d.push({ title: '无聚合结果', url: 'hiker://empty', col_type: 'text_center_1' });
