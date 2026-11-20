@@ -645,9 +645,11 @@ function hiksearch() {
             } else {
                 link = url + ';get;utf-8;{User-Agent@.js:MOBILE_UA}';
             }
+            var ico = (s.ico || SITE_ICO) + '@Referer=';
             d.push({
                 title: s.title,
-                img: (s.ico || SITE_ICO) + '@Referer=',
+                img: ico,
+                pic_url: ico,
                 url: $(link + '#noHistory#').rule((ck, k, w) => {
                     eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
                     hikseaerji(ck, k, w);
