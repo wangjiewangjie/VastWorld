@@ -725,11 +725,7 @@ function hikAggSearch(sitesJson, wd) {
                 } catch (e2) {}
                 var html = fetchPage(url, site.host, cookie);
                 if (/系统安全验证|因访问过多/.test(html || '')) {
-                    d.push({
-                        title: s.title + ' 需验证，点此打开网页',
-                        url: verifyOpenUrl(url),
-                        col_type: 'text_1'
-                    });
+                    d.push(verifyOpenItem(s.title + ' 需验证，点此打开网页', url, 'text_1'));
                     continue;
                 }
                 var list = parseList(html, site, site.host);
@@ -791,11 +787,7 @@ function hikseaerji(cktitle, key, wd) {
             }
         }
         if (/系统安全验证|因访问过多|请输入验证码/.test(html || '')) {
-            d.push({
-                title: '需要验证，点此打开网页完成',
-                url: verifyOpenUrl(pageUrl),
-                col_type: 'text_center_1'
-            });
+            d.push(verifyOpenItem('需要验证，点此打开网页完成', pageUrl, 'text_center_1'));
             d.push({
                 title: '我已验证，刷新',
                 url: $('hiker://empty#noLoading#').lazyRule((h, ckName, probe) => {
