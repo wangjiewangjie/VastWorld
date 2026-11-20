@@ -1,7 +1,7 @@
 var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/xyq/";
-var RULE_VER = "v22-anime6";
+var RULE_VER = "v22-anime7";
 var RULE_LAN = "http://192.168.3.222:8765/";
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则

@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime6'; // v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime7'; // v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_LAN = 'http://192.168.3.222:8765/';
 var RULE_BASES = [
@@ -281,25 +281,26 @@ function hikhmrule() {
         var kw = getMyVar('xyqxqystext', '');
         d.push({
             title: '搜索',
-            url: $.toString(() => {
-                return $('hiker://empty#noRecordHistory#$$$' + RULE_JSON + '$$$' + input + '$$$fypage$$$').rule(() => {
+            // $.toString 回调在独立环境执行，必须把路径当参数传入，不能直接引用 RULE_JSON
+            url: $.toString((jsonPath) => {
+                return $('hiker://empty#noRecordHistory#$$$' + jsonPath + '$$$' + input + '$$$fypage$$$').rule(() => {
                     eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
                     hiksearch();
                 });
-            }),
+            }, RULE_JSON),
             extra: { onChange: "putMyVar('xyqxqystext',input)", defaultValue: kw, titleVisible: true },
             col_type: 'input'
         });
         d.push({
             title: '聚合搜索',
-            url: $('#noLoading#').lazyRule(() => {
+            url: $('#noLoading#').lazyRule((jsonPath) => {
                 var w = getMyVar('xyqxqystext', '');
                 if (!w) return 'toast://请先输入关键词';
-                return $('hiker://empty#noRecordHistory#$$$' + RULE_JSON + '$$$' + w + '$$$fypage$$$').rule(() => {
+                return $('hiker://empty#noRecordHistory#$$$' + jsonPath + '$$$' + w + '$$$fypage$$$').rule(() => {
                     eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
                     hiksearch();
                 });
-            }),
+            }, RULE_JSON),
             col_type: 'flex_button'
         });
         d.push({
