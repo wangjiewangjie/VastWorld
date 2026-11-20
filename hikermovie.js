@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime10'; // v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime11'; // v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
