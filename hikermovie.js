@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime8'; // v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime9'; // v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -653,11 +653,19 @@ function hiksearch() {
                 col_type: 'icon_2_card'
             });
         }
-        // 一键聚合
+        // 一键聚合（搜索页必须用 hiker://empty，单写 #noLoading# 会报「链接为空」）
         d.push({
             title: '开始聚合搜索',
-            url: $('#noLoading#').lazyRule((sites, wd) => {
+            url: $('hiker://empty#noLoading#').lazyRule((sitesJson, wd) => {
                 eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                var sites = [];
+                try { sites = JSON.parse(sitesJson || '[]'); } catch (e) { sites = []; }
+                if (!sites.length) {
+                    sites = [
+                        { title: 'Omofun动漫', key: 'omofun' },
+                        { title: '樱花动漫', key: 'vtt6' }
+                    ];
+                }
                 var items = [{ title: '搜索中…', col_type: 'text_center_1', extra: { id: '__s' } }];
                 setResult(items);
                 var all = [];
@@ -700,9 +708,10 @@ function hiksearch() {
                     }
                 }
                 deleteItem('__s');
+                if (!all.length) all.push({ title: '无聚合结果', url: 'hiker://empty', col_type: 'text_center_1' });
                 for (var x = 0; x < all.length; x++) addItemAfter('', all[x]);
                 return 'hiker://empty';
-            }, sites, wd),
+            }, JSON.stringify(sites), wd),
             col_type: 'text_center_1'
         });
     } catch (e) {
