@@ -1,11 +1,9 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime7'; // v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime8'; // v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
-var RULE_LAN = 'http://192.168.3.222:8765/';
 var RULE_BASES = [
-    RULE_LAN,
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/',
     'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
@@ -292,31 +290,11 @@ function hikhmrule() {
             col_type: 'input'
         });
         d.push({
-            title: '聚合搜索',
-            url: $('#noLoading#').lazyRule((jsonPath) => {
-                var w = getMyVar('xyqxqystext', '');
-                if (!w) return 'toast://请先输入关键词';
-                return $('hiker://empty#noRecordHistory#$$$' + jsonPath + '$$$' + w + '$$$fypage$$$').rule(() => {
-                    eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
-                    hiksearch();
-                });
-            }, RULE_JSON),
-            col_type: 'flex_button'
-        });
-        d.push({
             title: '更新规则',
             url: $('#noLoading#').lazyRule((bases, ver) => {
                 eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
                 return tryUpdateFrom(bases, ver);
             }, RULE_BASES, RULE_VER),
-            col_type: 'flex_button'
-        });
-        d.push({
-            title: '局域网更新',
-            url: $('#noLoading#').lazyRule((lan, ver) => {
-                eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
-                return tryUpdateFrom([lan], ver);
-            }, RULE_LAN, RULE_VER),
             col_type: 'flex_button'
         });
         d.push({ col_type: 'line' });
