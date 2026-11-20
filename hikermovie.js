@@ -158,16 +158,12 @@ function cleanHttpUrl(u) {
     return /^https?:/i.test(u) ? u : '';
 }
 
-// 打开验证页：lazyRule 返回 https，比 web:// / 空链更稳
+// 打开验证页：二级页里直接给 https，嵌套 lazyRule/web:// 容易点了无效
 function verifyOpenItem(title, u, col) {
     var link = cleanHttpUrl(u);
     return {
         title: title || '需要验证，点此打开网页',
-        url: link
-            ? $('hiker://empty#noLoading#').lazyRule((href) => {
-                return href;
-            }, link)
-            : 'hiker://empty',
+        url: link || 'hiker://empty',
         col_type: col || 'text_center_1'
     };
 }
