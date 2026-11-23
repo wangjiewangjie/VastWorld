@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime20'; // v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime21'; // v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -181,17 +181,16 @@ function pushOmofunManual(d, host, ckName, pageUrl, col) {
         title: '② 我已继续访问，重新搜索',
         url: $('hiker://empty#noLoading#').lazyRule((h, name, probe) => {
             eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
-            var cok2 = readCookie(h, probe) || '';
-            try { cok2 = fetch(COOKIE_DIR + name + 'cookie.txt', {}) || cok2; } catch (e0) {}
-            try { cok2 = fetch(COOKIE_DIR + 'Omofun动漫cookie.txt', {}) || cok2; } catch (e1) {}
-            var passed = omofunFetchPassed(h, probe, cok2);
-            cok2 = passed.cookie || cok2;
+            // 实时 Cookie 优先，禁止被文件里未验证会话覆盖
+            var live = readCookie(h, probe) || '';
+            var passed = omofunFetchPassed(h, probe, live);
+            var cok2 = passed.cookie || live;
             if (cok2) {
                 try { writeFile(COOKIE_DIR + name + 'cookie.txt', cok2); } catch (e2) {}
                 try { writeFile(COOKIE_DIR + 'Omofun动漫cookie.txt', cok2); } catch (e3) {}
             }
             if (isOmofunGate(passed.html)) {
-                return 'toast://仍在门禁页(cookie=' + (cok2 ? cok2.length : 0) + ')，请先完成①';
+                return 'toast://仍在门禁页 cookie=' + (cok2 ? cok2.length : 0) + ' html=' + ((passed.html || '').length) + ' v=' + String(passed.verify || '').substring(0, 40);
             }
             refreshPage(false);
             return 'hiker://empty';
@@ -244,9 +243,8 @@ function pushCards(d, list, host, col) {
 }
 
 // Omofun「访问过多 / 继续访问」门禁：点按钮实际调 verify_check，不是真验证码
+// 门禁 token 必须用手工 base64：海阔 base64Encode 会弄坏 XOR 后的二进制字符
 function b64enc(str) {
-    try { if (typeof base64Encode == 'function') return base64Encode(str); } catch (e) {}
-    try { if (typeof btoa == 'function') return btoa(str); } catch (e2) {}
     var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     var out = '', i = 0;
     while (i < str.length) {
@@ -379,18 +377,8 @@ function omofunCookie(host, probe) {
             saveOmoCookie(cok);
             return cok;
         }
-        var token = omofunRefreshToken();
-        var chk = omoReq(host + '/index.php/ajax/verify_check?type=search', host, cok, {
-            method: 'POST',
-            body: 'i=' + encodeURIComponent(token),
-            timeout: 8000,
-            headers: {
-                'Referer': probe,
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        cok = chk.cookie || cok;
+        omofunVerifyPost(host, probe, cok);
+        cok = readCookie(host, probe) || cok;
         saveOmoCookie(cok);
         return cok;
     } catch (e) {
@@ -399,38 +387,73 @@ function omofunCookie(host, probe) {
     }
 }
 
-function omofunFetchPassed(host, pageUrl, cookie) {
-    var cok = cookie || '';
-    try { if (!cok) cok = fetch(COOKIE_DIR + 'Omofun动漫cookie.txt', {}) || ''; } catch (e0) {}
-    var r = omoReq(pageUrl, host, cok, { timeout: 10000 });
-    cok = r.cookie || cok;
-    var html = r.html || '';
-    if (!isOmofunGate(html)) {
-        saveOmoCookie(cok);
-        return { html: html, cookie: cok };
-    }
-    cok = omofunCookie(host, pageUrl) || cok;
-    r = omoReq(pageUrl, host, cok, { timeout: 10000 });
-    html = r.html || '';
-    cok = r.cookie || cok;
-    if (isOmofunGate(html)) {
-        var token = omofunRefreshToken();
-        omoReq(host + '/index.php/ajax/verify_check?type=search', host, cok, {
-            method: 'POST',
-            body: 'i=' + encodeURIComponent(token),
-            timeout: 8000,
+function omofunVerifyPost(host, probe, cok) {
+    var token = omofunRefreshToken();
+    var resp = '';
+    try {
+        resp = fetch(host + '/index.php/ajax/verify_check?type=search', {
             headers: {
-                'Referer': pageUrl,
+                'User-Agent': MOBILE_UA,
+                'Referer': probe,
+                'Cookie': cok || '',
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        r = omoReq(pageUrl, host, cok, { timeout: 10000 });
-        html = r.html || html;
-        cok = r.cookie || cok;
+            },
+            body: 'i=' + encodeURIComponent(token),
+            method: 'POST',
+            timeout: 8000
+        }) || '';
+    } catch (e) {}
+    if (resp.indexOf('"code":1') < 0) {
+        try {
+            resp = fetch(host + '/index.php/ajax/verify_check?type=search', {
+                headers: {
+                    'User-Agent': MOBILE_UA,
+                    'Referer': probe,
+                    'Cookie': cok || '',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: '{"i":"' + token + '"}',
+                method: 'POST',
+                timeout: 8000
+            }) || resp;
+        } catch (e2) {}
     }
+    return resp;
+}
+
+function omofunFetchPassed(host, pageUrl, cookie) {
+    // 优先浏览器/海阔实时 Cookie，文件里往往是未验证的旧会话
+    var live = readCookie(host, pageUrl);
+    var fileC = '';
+    try { fileC = fetch(COOKIE_DIR + 'Omofun动漫cookie.txt', {}) || ''; } catch (e0) {}
+    var cok = live || cookie || fileC || '';
+
+    // 最终正文一律普通 fetch，避免 withHeaders 干扰
+    var html = fetchPage(pageUrl, host, cok);
+    if (!isOmofunGate(html)) {
+        cok = readCookie(host, pageUrl) || cok;
+        saveOmoCookie(cok);
+        return { html: html, cookie: cok, verify: 'skip' };
+    }
+
+    // 先对当前会话打 verify_check（网页点过继续访问后，用 live cookie 通常直接过）
+    var resp = omofunVerifyPost(host, pageUrl, cok);
+    cok = readCookie(host, pageUrl) || cok;
+    html = fetchPage(pageUrl, host, cok);
+    if (!isOmofunGate(html)) {
+        saveOmoCookie(cok);
+        return { html: html, cookie: cok, verify: resp };
+    }
+
+    // 再完整走一遍建会话 + check
+    cok = omofunCookie(host, pageUrl) || cok;
+    resp = omofunVerifyPost(host, pageUrl, cok);
+    cok = readCookie(host, pageUrl) || cok;
+    html = fetchPage(pageUrl, host, cok);
     saveOmoCookie(cok);
-    return { html: html, cookie: cok };
+    return { html: html, cookie: cok, verify: resp };
 }
 
 // ---------- 更新 ----------
