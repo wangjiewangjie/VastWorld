@@ -1,7 +1,7 @@
 var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/xyq/";
-var RULE_VER = "v22-anime19";
+var RULE_VER = "v22-anime20";
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
 var RULE_BASES = [

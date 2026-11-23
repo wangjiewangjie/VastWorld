@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime19'; // v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime20'; // v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -166,6 +166,38 @@ function verifyOpenItem(title, u, col) {
         url: link || 'hiker://empty',
         col_type: col || 'text_center_1'
     };
+}
+
+// Omofun 手工过门禁：两步按钮固定展示（不依赖返回监听）
+function pushOmofunManual(d, host, ckName, pageUrl, col) {
+    col = col || 'text_center_1';
+    var link = cleanHttpUrl(pageUrl) || (host + '/');
+    d.push({
+        title: '① 打开网页并点「继续访问」',
+        url: link,
+        col_type: col
+    });
+    d.push({
+        title: '② 我已继续访问，重新搜索',
+        url: $('hiker://empty#noLoading#').lazyRule((h, name, probe) => {
+            eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+            var cok2 = readCookie(h, probe) || '';
+            try { cok2 = fetch(COOKIE_DIR + name + 'cookie.txt', {}) || cok2; } catch (e0) {}
+            try { cok2 = fetch(COOKIE_DIR + 'Omofun动漫cookie.txt', {}) || cok2; } catch (e1) {}
+            var passed = omofunFetchPassed(h, probe, cok2);
+            cok2 = passed.cookie || cok2;
+            if (cok2) {
+                try { writeFile(COOKIE_DIR + name + 'cookie.txt', cok2); } catch (e2) {}
+                try { writeFile(COOKIE_DIR + 'Omofun动漫cookie.txt', cok2); } catch (e3) {}
+            }
+            if (isOmofunGate(passed.html)) {
+                return 'toast://仍在门禁页(cookie=' + (cok2 ? cok2.length : 0) + ')，请先完成①';
+            }
+            refreshPage(false);
+            return 'hiker://empty';
+        }, host, ckName || 'Omofun动漫', link),
+        col_type: col
+    });
 }
 
 function parseList(html, site, host) {
@@ -870,13 +902,15 @@ function hikAggSearch(sitesJson, wd) {
                 } else {
                     html = fetchPage(url, site.host, cookie);
                 }
-                if (isOmofunGate(html)) {
-                    d.push(verifyOpenItem(s.title + ' 需点网页继续访问', url, 'text_1'));
+                if (site.needCookie && isOmofunGate(html)) {
+                    d.push({ title: s.title + ' 需继续访问', url: 'hiker://empty', col_type: 'text_1' });
+                    pushOmofunManual(d, site.host, s.title, url, 'text_1');
                     continue;
                 }
                 var list = parseList(html, site, site.host);
                 if (!list.length) {
                     d.push({ title: s.title + ' 无结果', url: url, col_type: 'text_1' });
+                    if (site.needCookie) pushOmofunManual(d, site.host, s.title, url, 'text_1');
                     continue;
                 }
                 d.push({ title: '—— ' + s.title + ' · ' + list.length + ' ——', url: 'hiker://empty', col_type: 'text_1' });
@@ -930,57 +964,44 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
         } else {
             html = fetchPage(pageUrl, host, cookie);
         }
-        if (isOmofunGate(html)) {
-            d.push({
-                title: '自动过门禁未成功 · 点此打开网页并点「继续访问」',
-                url: $('hiker://empty#noLoading#').lazyRule((u) => {
-                    return u;
-                }, pageUrl),
-                col_type: 'text_center_1'
-            });
-            d.push({
-                title: '我已继续访问，重新搜索',
-                url: $('hiker://empty#noLoading#').lazyRule((h, ckName, probe) => {
-                    eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
-                    var cok2 = readCookie(h, probe) || '';
-                    try { cok2 = fetch(COOKIE_DIR + ckName + 'cookie.txt', {}) || cok2; } catch (e0) {}
-                    var passed = omofunFetchPassed(h, probe, cok2);
-                    cok2 = passed.cookie || cok2;
-                    if (cok2) {
-                        try { writeFile(COOKIE_DIR + ckName + 'cookie.txt', cok2); } catch (e1) {}
-                        try { writeFile(COOKIE_DIR + 'Omofun动漫cookie.txt', cok2); } catch (e2) {}
-                    }
-                    if (isOmofunGate(passed.html)) {
-                        return 'toast://仍在门禁页(cookie=' + (cok2 ? cok2.length : 0) + ')，请先打开网页点继续访问';
-                    }
-                    refreshPage(false);
-                    return 'hiker://empty';
-                }, host, cktitle || site.title, pageUrl),
-                col_type: 'text_center_1'
-            });
-        } else {
-            var list = parseList(html, site, host);
-            if (!list.length) {
+        var list = isOmofunGate(html) ? [] : parseList(html, site, host);
+        // 门禁或无结果时固定给出两步按钮（不靠返回监听）
+        if (site.needCookie && (isOmofunGate(html) || !list.length)) {
+            if (isOmofunGate(html)) {
+                d.push({
+                    title: 'Omofun 访问较多，请按下面两步操作',
+                    url: 'toast://先①后②',
+                    col_type: 'text_center_1'
+                });
+            } else {
                 d.push({
                     title: '无搜索结果 · html=' + ((html || '').length),
                     url: pageUrl,
                     col_type: 'text_center_1'
                 });
-            } else {
-                for (var i = 0; i < list.length; i++) {
-                    var v = list[i];
-                    var show = wd ? v.title.replace(wd, '「' + wd + '」') : v.title;
-                    d.push({
-                        title: show + (v.desc ? ' ' + v.desc : ''),
-                        pic_url: v.img ? imgUrl(v.img, host) : '',
-                        url: $(v.url + '#noHistory#').rule((name, detailUrl) => {
-                            eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
-                            omerj(name, detailUrl);
-                        }, v.title, v.url),
-                        col_type: v.img ? 'movie_1_vertical_pic' : 'text_center_1'
-                    });
-                }
             }
+            pushOmofunManual(d, host, cktitle || site.title, pageUrl, 'text_center_1');
+        }
+        if (!isOmofunGate(html) && list.length) {
+            for (var i = 0; i < list.length; i++) {
+                var v = list[i];
+                var show = wd ? v.title.replace(wd, '「' + wd + '」') : v.title;
+                d.push({
+                    title: show + (v.desc ? ' ' + v.desc : ''),
+                    pic_url: v.img ? imgUrl(v.img, host) : '',
+                    url: $(v.url + '#noHistory#').rule((name, detailUrl) => {
+                        eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                        omerj(name, detailUrl);
+                    }, v.title, v.url),
+                    col_type: v.img ? 'movie_1_vertical_pic' : 'text_center_1'
+                });
+            }
+        } else if (!site.needCookie && !list.length) {
+            d.push({
+                title: '无搜索结果 · html=' + ((html || '').length),
+                url: pageUrl,
+                col_type: 'text_center_1'
+            });
         }
     } catch (e) {
         d.push(errItem('searchPage', e));
