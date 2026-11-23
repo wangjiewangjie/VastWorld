@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime17'; // v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime18'; // v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -141,81 +141,14 @@ function loadJsonSites() {
     }
 }
 
-function mergeCookie(oldC, add) {
-    var map = {};
-    function eat(s) {
-        if (!s) return;
-        var parts = (s + '').split(';');
-        for (var i = 0; i < parts.length; i++) {
-            var kv = parts[i].replace(/^\s+|\s+$/g, '');
-            if (!kv || kv.indexOf('=') < 0) continue;
-            var low = kv.toLowerCase();
-            if (/^(path|domain|expires|max-age|secure|httponly|samesite)=/.test(low)) continue;
-            var n = kv.split('=')[0].replace(/^\s+|\s+$/g, '');
-            if (n) map[n] = kv;
-        }
-    }
-    eat(oldC);
-    eat(add);
-    var out = [];
-    for (var k in map) out.push(map[k]);
-    return out.join('; ');
-}
-
-function parseSetCookie(head, oldC) {
-    if (!head) return oldC || '';
-    var cok = oldC || '';
-    var re = /set-cookie:\s*([^\r\n]+)/ig;
-    var m;
-    while ((m = re.exec(head))) {
-        var pair = (m[1] || '').split(';')[0];
-        if (pair) cok = mergeCookie(cok, pair);
-    }
-    return cok;
-}
-
-// withHeaders 抓取，顺便捞 Set-Cookie（海阔 getCookie 经常为空）
-function fetchBundle(url, host, cookie, extra) {
+function fetchPage(url, host, cookie) {
     var headers = { 'User-Agent': MOBILE_UA, 'Referer': (host || url) + '/' };
     if (cookie) headers.Cookie = cookie;
-    if (extra && extra.headers) {
-        for (var k in extra.headers) headers[k] = extra.headers[k];
-    }
-    var opt = { headers: headers, timeout: (extra && extra.timeout) || 12000, withHeaders: true };
-    if (extra && extra.method) opt.method = extra.method;
-    if (extra && extra.body != null) opt.body = extra.body;
-    var raw = '';
-    try { raw = fetch(url, opt) || ''; } catch (e) {
-        try { raw = fetch(url, { headers: headers, timeout: opt.timeout }) || ''; } catch (e2) { raw = ''; }
-    }
-    if (!raw || raw.substring(0, 5) == 'error') return { html: '', cookie: cookie || '', head: '' };
-    var head = '';
-    var html = raw;
-    var split = raw.indexOf('\r\n\r\n');
-    var gap = 4;
-    if (split < 0) { split = raw.indexOf('\n\n'); gap = 2; }
-    if (split >= 0 && split < 8000 && /set-cookie:|content-type:|HTTP\//i.test(raw.substring(0, split))) {
-        head = raw.substring(0, split);
-        html = raw.substring(split + gap);
-    }
-    var cok = parseSetCookie(head, cookie || '');
     try {
-        var gc = getCookie(host) || getCookie(url) || '';
-        if (gc) cok = mergeCookie(cok, gc);
-    } catch (e3) {}
-    return { html: html, cookie: cok, head: head };
-}
-
-function fetchPage(url, host, cookie) {
-    var r = fetchBundle(url, host, cookie);
-    if (r.html) return r.html;
-    try {
-        var headers = { 'User-Agent': MOBILE_UA, 'Referer': (host || url) + '/' };
-        if (cookie) headers.Cookie = cookie;
-        return fetch(url, { headers: headers, timeout: 12000 }) || '';
-    } catch (e) {
-        try { return request(url) || ''; } catch (e2) { return ''; }
-    }
+        var html = fetch(url, { headers: headers, timeout: 12000 }) || '';
+        if (html && html.substring(0, 5) != 'error') return html;
+    } catch (e) {}
+    try { return request(url) || ''; } catch (e2) { return ''; }
 }
 
 // 去掉 ;get;utf-8;{...} / #hash，得到可打开的 http 链接
@@ -314,29 +247,39 @@ function isOmofunGate(html) {
     return /因访问过多|继续访问|verify_submit|verify_check/.test(html);
 }
 
+function readCookie(host, pageUrl) {
+    var cok = '';
+    try { cok = getCookie(host) || ''; } catch (e) {}
+    try { if (!cok && pageUrl) cok = getCookie(pageUrl) || ''; } catch (e2) {}
+    return cok || '';
+}
+
 function omofunCookie(host, probe) {
     try {
         probe = cleanHttpUrl(probe) || (host + '/search/a----------1---.html');
         var cok = '';
         try { cok = fetch(COOKIE_DIR + 'Omofun动漫cookie.txt', {}) || ''; } catch (e0) {}
-        var home = fetchBundle(host + '/', host, cok, { timeout: 8000 });
-        cok = home.cookie || cok;
-        var page = fetchBundle(probe, host, cok, { timeout: 8000 });
-        cok = page.cookie || cok;
-        if (!isOmofunGate(page.html)) return cok;
+        // 不用 withHeaders：部分海阔版本会搞坏正文，导致全站搜空
+        try { fetch(host + '/', { headers: { 'User-Agent': MOBILE_UA, 'Referer': host + '/' }, timeout: 8000 }); } catch (e1) {}
+        cok = readCookie(host, probe) || cok;
+        var html = fetchPage(probe, host, cok);
+        cok = readCookie(host, probe) || cok;
+        if (!isOmofunGate(html)) return cok;
 
         var token = omofunRefreshToken();
-        var chk = fetchBundle(host + '/index.php/ajax/verify_check?type=search', host, cok, {
-            method: 'POST',
-            body: 'i=' + encodeURIComponent(token),
-            timeout: 8000,
+        fetch(host + '/index.php/ajax/verify_check?type=search', {
             headers: {
+                'User-Agent': MOBILE_UA,
                 'Referer': probe,
+                'Cookie': cok,
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'X-Requested-With': 'XMLHttpRequest'
-            }
+            },
+            body: 'i=' + encodeURIComponent(token),
+            method: 'POST',
+            timeout: 8000
         });
-        cok = chk.cookie || cok;
+        cok = readCookie(host, probe) || cok;
         if (cok) {
             try { writeFile(COOKIE_DIR + 'Omofun动漫cookie.txt', cok); } catch (e3) {}
         }
@@ -347,11 +290,11 @@ function omofunCookie(host, probe) {
     }
 }
 
-// 过门禁后重抓页面（同一会话 Cookie）
+// 过门禁后重抓页面（交给海阔内置 Cookie 罐）
 function omofunFetchPassed(host, pageUrl, cookie) {
-    var r = fetchBundle(pageUrl, host, cookie || '', { timeout: 10000 });
-    var cok = r.cookie || cookie || '';
-    var html = r.html || '';
+    var cok = cookie || '';
+    var html = fetchPage(pageUrl, host, cok);
+    cok = readCookie(host, pageUrl) || cok;
     if (!isOmofunGate(html)) {
         if (cok) {
             try { writeFile(COOKIE_DIR + 'Omofun动漫cookie.txt', cok); } catch (e0) {}
@@ -359,25 +302,24 @@ function omofunFetchPassed(host, pageUrl, cookie) {
         return { html: html, cookie: cok };
     }
     cok = omofunCookie(host, pageUrl) || cok;
-    r = fetchBundle(pageUrl, host, cok, { timeout: 10000 });
-    html = r.html || '';
-    cok = r.cookie || cok;
-    // 再试一次（偶发第一次 check 后页面仍缓存门禁）
-    if (isOmofunGate(html) && cok) {
+    html = fetchPage(pageUrl, host, cok);
+    cok = readCookie(host, pageUrl) || cok;
+    if (isOmofunGate(html)) {
         var token = omofunRefreshToken();
-        fetchBundle(host + '/index.php/ajax/verify_check?type=search', host, cok, {
-            method: 'POST',
-            body: 'i=' + encodeURIComponent(token),
-            timeout: 8000,
+        fetch(host + '/index.php/ajax/verify_check?type=search', {
             headers: {
+                'User-Agent': MOBILE_UA,
                 'Referer': pageUrl,
+                'Cookie': cok,
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'X-Requested-With': 'XMLHttpRequest'
-            }
+            },
+            body: 'i=' + encodeURIComponent(token),
+            method: 'POST',
+            timeout: 8000
         });
-        r = fetchBundle(pageUrl, host, cok, { timeout: 10000 });
-        html = r.html || html;
-        cok = r.cookie || cok;
+        cok = readCookie(host, pageUrl) || cok;
+        html = fetchPage(pageUrl, host, cok);
     }
     if (cok) {
         try { writeFile(COOKIE_DIR + 'Omofun动漫cookie.txt', cok); } catch (e1) {}
@@ -934,7 +876,11 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
         } else {
             var list = parseList(html, site, host);
             if (!list.length) {
-                d.push({ title: '无搜索结果', url: pageUrl, col_type: 'text_center_1' });
+                d.push({
+                    title: '无搜索结果 · html=' + ((html || '').length),
+                    url: pageUrl,
+                    col_type: 'text_center_1'
+                });
             } else {
                 for (var i = 0; i < list.length; i++) {
                     var v = list[i];
