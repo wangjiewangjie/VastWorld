@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime15'; // v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime16'; // v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -211,46 +211,79 @@ function pushCards(d, list, host, col) {
     }
 }
 
-// Omofun 搜索验证
+// Omofun「访问过多 / 继续访问」门禁：点按钮实际调 verify_check，不是真验证码
+function b64enc(str) {
+    try { if (typeof base64Encode == 'function') return base64Encode(str); } catch (e) {}
+    try { if (typeof btoa == 'function') return btoa(str); } catch (e2) {}
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    var out = '', i = 0;
+    while (i < str.length) {
+        var c1 = str.charCodeAt(i++) & 0xff;
+        var c2 = i < str.length ? str.charCodeAt(i++) & 0xff : NaN;
+        var c3 = i < str.length ? str.charCodeAt(i++) & 0xff : NaN;
+        var e1 = c1 >> 2;
+        var e2 = ((c1 & 3) << 4) | (c2 >> 4);
+        var e3 = ((c2 & 15) << 2) | (c3 >> 6);
+        var e4 = c3 & 63;
+        if (isNaN(c2)) { e3 = 64; e4 = 64; }
+        else if (isNaN(c3)) e4 = 64;
+        out += chars.charAt(e1) + chars.charAt(e2) + (e3 == 64 ? '=' : chars.charAt(e3)) + (e4 == 64 ? '=' : chars.charAt(e4));
+    }
+    return out;
+}
+
+function omofunRefreshToken() {
+    var key = [0x4e, 0x3f, 0xa9, 0xc2, 0x12, 0x7d, 0x88, 0xef, 0x55, 0xaa, 0x0b, 0xcd, 0xde, 0xad, 0xbe, 0xef];
+    var f = String(Date.now());
+    var C = '';
+    for (var i = 0; i < f.length; i++) C += String.fromCharCode(f.charCodeAt(i) ^ key[i % key.length]);
+    return b64enc(C);
+}
+
+function isOmofunGate(html) {
+    return /因访问过多|继续访问|verify_submit|verify_check|系统安全验证/.test(html || '');
+}
+
 function omofunCookie(host, probe) {
     try {
-        var opt = { headers: { 'User-Agent': MOBILE_UA, 'Referer': host + '/' }, timeout: 10000 };
-        fetch(host + '/', opt);
-        var html = fetch(probe || (host + '/search/a----------1---.html'), opt);
+        probe = cleanHttpUrl(probe) || (host + '/search/a----------1---.html');
+        var opt = { headers: { 'User-Agent': MOBILE_UA, 'Referer': host + '/' }, timeout: 8000 };
+        try { fetch(host + '/', opt); } catch (e0) {}
+        var html = fetch(probe, opt) || '';
         var cok = '';
         try { cok = getCookie(host) || ''; } catch (e) {}
-        if (!/系统安全验证|因访问过多|继续访问|function\s+refresh/.test(html || '')) return cok;
-        var scripts = (html || '').match(/<script>([\s\S]*?)<\/script>/g);
-        if (!scripts || !scripts.length) return '';
-        var code = scripts[scripts.length - 1].replace(/<\/?script>/gi, '');
-        if (code.indexOf('refresh') < 0) return '';
-        var token = '';
-        (function () {
-            var $ = function (x) {
-                if (typeof x == 'function') { try { x(); } catch (e) {} return $; }
-                return {
-                    focus: function () { return this; },
-                    bind: function () { return this; },
-                    click: function () { return this; },
-                    val: function (v) { if (v != null) token = v; return token; }
-                };
-            };
-            eval(code);
-            try { refresh(); } catch (e) {}
-        })();
-        if (!token) return cok;
-        fetch(host + '/search/index.php?searchtype=5&tid=&page=1&submit=&keyword=a', {
-            headers: { 'User-Agent': MOBILE_UA, 'Referer': host + '/', 'Cookie': cok },
-            body: 'validate=' + token,
+        if (!isOmofunGate(html)) return cok;
+
+        var token = omofunRefreshToken();
+        fetch(host + '/index.php/ajax/verify_check?type=search', {
+            headers: {
+                'User-Agent': MOBILE_UA,
+                'Referer': probe,
+                'Cookie': cok,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'i=' + encodeURIComponent(token),
             method: 'POST',
-            timeout: 10000
+            timeout: 8000
         });
-        try { cok = getCookie(host) || cok; } catch (e) {}
+        try { cok = getCookie(host) || cok; } catch (e2) {}
+        if (cok) {
+            try { writeFile(COOKIE_DIR + 'Omofun动漫cookie.txt', cok); } catch (e3) {}
+        }
         return cok;
     } catch (e) {
         logErr('omofunCookie', e);
         return '';
     }
+}
+
+// 过门禁后重抓页面
+function omofunFetchPassed(host, pageUrl, cookie) {
+    var html = fetchPage(pageUrl, host, cookie);
+    if (!isOmofunGate(html)) return { html: html, cookie: cookie || '' };
+    var cok = omofunCookie(host, pageUrl) || cookie || '';
+    html = fetchPage(pageUrl, host, cok);
+    return { html: html, cookie: cok };
 }
 
 // ---------- 更新 ----------
@@ -710,14 +743,20 @@ function hikAggSearch(sitesJson, wd) {
                 var url = fillTpl(site.search, {
                     host: site.host, wd: wd, ewd: encodeURIComponent(wd)
                 }).replace(/fypage/g, '1');
-                // 聚合不跑 omofunCookie（易卡死），只用本地已存 cookie
                 var cookie = '';
                 try {
                     if (site.needCookie) cookie = fetch(COOKIE_DIR + s.title + 'cookie.txt', {}) || '';
                 } catch (e2) {}
-                var html = fetchPage(url, site.host, cookie);
-                if (/系统安全验证|因访问过多/.test(html || '')) {
-                    d.push(verifyOpenItem(s.title + ' 需验证，点此打开网页', url, 'text_1'));
+                var html = '';
+                if (site.needCookie) {
+                    var passed = omofunFetchPassed(site.host, url, cookie);
+                    html = passed.html;
+                    cookie = passed.cookie || cookie;
+                } else {
+                    html = fetchPage(url, site.host, cookie);
+                }
+                if (isOmofunGate(html)) {
+                    d.push(verifyOpenItem(s.title + ' 需点网页继续访问', url, 'text_1'));
                     continue;
                 }
                 var list = parseList(html, site, site.host);
@@ -764,18 +803,28 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
         try {
             if (site.needCookie) cookie = fetch(COOKIE_DIR + (cktitle || site.title) + 'cookie.txt', {}) || '';
         } catch (e0) {}
-        // 自己抓，不依赖 getResCode（远程 .rule 入口遇验证会一直转圈）
-        var html = fetchPage(pageUrl, host, cookie);
-        if (site.needCookie && /系统安全验证|因访问过多|继续访问|请输入验证码/.test(html || '')) {
-            // 不在进页时自动解验证（易卡死），直接给打开网页入口
-            d.push(verifyOpenItem('需要验证，点此打开网页完成', pageUrl, 'text_center_1'));
+        // 自己抓；遇「访问过多」自动点继续访问（verify_check），不是真验证码
+        var html = '';
+        if (site.needCookie) {
+            var passed = omofunFetchPassed(host, pageUrl, cookie);
+            html = passed.html;
+            cookie = passed.cookie || cookie;
+            if (cookie) {
+                try { writeFile(COOKIE_DIR + (cktitle || site.title) + 'cookie.txt', cookie); } catch (e4) {}
+            }
+        } else {
+            html = fetchPage(pageUrl, host, cookie);
+        }
+        if (isOmofunGate(html)) {
+            d.push(verifyOpenItem('访问较多，点此打开网页后点「继续访问」', pageUrl, 'text_center_1'));
             d.push({
-                title: '我已验证，刷新',
+                title: '我已继续访问，刷新',
                 url: $('hiker://empty#noLoading#').lazyRule((h, ckName, probe) => {
                     eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
                     try {
                         var cok2 = '';
                         try { cok2 = getCookie(h) || ''; } catch (e1) {}
+                        if (!cok2) cok2 = omofunCookie(h, probe) || '';
                         if (cok2) writeFile(COOKIE_DIR + ckName + 'cookie.txt', cok2);
                     } catch (e2) {}
                     refreshPage(false);
