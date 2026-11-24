@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime24'; // v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime25'; // v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -270,39 +270,29 @@ function b64fromBytes(bytes) {
 }
 
 function omofunNowMs() {
-    // 海阔 Rhino 里 Date.getTime() 可能变成 Java Double → "1.79E12"，服务端会 invalid_token
-    try {
-        return String(java.lang.String.valueOf(java.lang.System.currentTimeMillis()));
-    } catch (e0) {}
-    try {
-        var t = Number(new Date().getTime());
-        var s = String(Math.floor(t));
-        if (/^\d{12,14}$/.test(s)) return s;
-    } catch (e1) {}
-    return String(+new Date()).replace(/\D/g, '');
+    // 禁止 String(number)/valueOf(double)：Rhino 会得到 "1.79E12" → invalid_token
+    var t = 0;
+    try { t = +java.lang.System.currentTimeMillis(); } catch (e0) {
+        try { t = +new Date(); } catch (e1) { t = 0; }
+    }
+    t = Math.floor(Math.abs(Number(t)) || 0);
+    var s = '';
+    if (t < 1) t = 1;
+    while (t > 0) {
+        var d = t % 10;
+        s = '0123456789'.charAt(d) + s;
+        t = (t - d) / 10;
+    }
+    return s;
 }
 
 function omofunRefreshToken() {
     var key = [0x4e, 0x3f, 0xa9, 0xc2, 0x12, 0x7d, 0x88, 0xef, 0x55, 0xaa, 0x0b, 0xcd, 0xde, 0xad, 0xbe, 0xef];
     var f = omofunNowMs();
+    if (!/^\d{12,14}$/.test(f)) f = omofunNowMs();
     var bytes = [];
     for (var i = 0; i < f.length; i++) bytes.push((f.charCodeAt(i) & 0xff) ^ key[i % 16]);
-    try {
-        var arr = null;
-        if (typeof java !== 'undefined') {
-            arr = java.lang.reflect.Array.newInstance(java.lang.Byte.TYPE, bytes.length);
-            for (var j = 0; j < bytes.length; j++) {
-                var v = bytes[j];
-                arr[j] = v > 127 ? v - 256 : v;
-            }
-        }
-        if (arr && typeof android !== 'undefined' && android.util && android.util.Base64) {
-            return String(android.util.Base64.encodeToString(arr, 2));
-        }
-        if (arr && java.util && java.util.Base64) {
-            return String(java.util.Base64.getEncoder().encodeToString(arr));
-        }
-    } catch (eJ) {}
+    // 只用手工 base64，避免 Java Base64 与网页 btoa 不一致
     return b64fromBytes(bytes);
 }
 
@@ -562,7 +552,7 @@ function omofunFetchPassed(host, pageUrl, cookie) {
             return {
                 html: lastHtml,
                 cookie: cok,
-                verify: tag + '|ms=' + omofunNowMs().substring(0, 10) + '|t=' + String(lastVer.token || '').substring(0, 12) + '|' + String(lastVer.resp || '')
+                verify: tag + '|f=' + omofunNowMs() + '|t=' + String(lastVer.token || '').substring(0, 16) + '|' + String(lastVer.resp || '')
             };
         }
     } catch (eJava) {
@@ -584,7 +574,7 @@ function omofunFetchPassed(host, pageUrl, cookie) {
     return {
         html: html,
         cookie: cok,
-        verify: tag + '|t=' + String(ver2.token || '').substring(0, 14) + '|' + String(ver2.resp || '').substring(0, 48)
+        verify: tag + '|f=' + omofunNowMs() + '|t=' + String(ver2.token || '').substring(0, 16) + '|' + String(ver2.resp || '').substring(0, 40)
     };
 }
 
