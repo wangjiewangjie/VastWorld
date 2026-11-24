@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime23'; // v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime24'; // v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -269,9 +269,22 @@ function b64fromBytes(bytes) {
     return out;
 }
 
+function omofunNowMs() {
+    // 海阔 Rhino 里 Date.getTime() 可能变成 Java Double → "1.79E12"，服务端会 invalid_token
+    try {
+        return String(java.lang.String.valueOf(java.lang.System.currentTimeMillis()));
+    } catch (e0) {}
+    try {
+        var t = Number(new Date().getTime());
+        var s = String(Math.floor(t));
+        if (/^\d{12,14}$/.test(s)) return s;
+    } catch (e1) {}
+    return String(+new Date()).replace(/\D/g, '');
+}
+
 function omofunRefreshToken() {
     var key = [0x4e, 0x3f, 0xa9, 0xc2, 0x12, 0x7d, 0x88, 0xef, 0x55, 0xaa, 0x0b, 0xcd, 0xde, 0xad, 0xbe, 0xef];
-    var f = String(new Date().getTime());
+    var f = omofunNowMs();
     var bytes = [];
     for (var i = 0; i < f.length; i++) bytes.push((f.charCodeAt(i) & 0xff) ^ key[i % 16]);
     try {
@@ -507,39 +520,49 @@ function omofunFetchPassed(host, pageUrl, cookie) {
     var cok = live || cookie || fileC || '';
     var tag = RULE_VER;
 
-    // A. 先走 Java 完整会话：建 PHPSESSID → 打 verify_check → 再拉列表
+    // A. Java 完整会话；旧 cookie 可能是未验证会话，失败则清空重建
     try {
-        var home = javaHttp('GET', host + '/', { 'User-Agent': MOBILE_UA, 'Cookie': cok || '' }, null);
-        cok = mergeCookie(cok, home.cookie);
-        var gate = javaHttp('GET', pageUrl, {
-            'User-Agent': MOBILE_UA,
-            'Referer': host + '/',
-            'Cookie': cok || ''
-        }, null);
-        cok = mergeCookie(cok, gate.cookie);
-        if (!isOmofunGate(gate.body)) {
-            saveOmoCookie(cok);
-            return { html: gate.body, cookie: cok, verify: tag + '|skip' };
+        var attempts = [cok || '', ''];
+        var lastVer = null;
+        var lastHtml = '';
+        for (var ai = 0; ai < attempts.length; ai++) {
+            var useCok = attempts[ai];
+            var home = javaHttp('GET', host + '/', { 'User-Agent': MOBILE_UA, 'Cookie': useCok }, null);
+            useCok = mergeCookie(useCok, home.cookie);
+            var gate = javaHttp('GET', pageUrl, {
+                'User-Agent': MOBILE_UA,
+                'Referer': host + '/',
+                'Cookie': useCok
+            }, null);
+            useCok = mergeCookie(useCok, gate.cookie);
+            lastHtml = gate.body || lastHtml;
+            if (!isOmofunGate(gate.body)) {
+                saveOmoCookie(useCok);
+                return { html: gate.body, cookie: useCok, verify: tag + '|skip' };
+            }
+            var ver = omofunVerifyPost(host, pageUrl, useCok);
+            lastVer = ver;
+            if (ver.cookie) useCok = mergeCookie(useCok, ver.cookie);
+            var page = javaHttp('GET', pageUrl, {
+                'User-Agent': MOBILE_UA,
+                'Referer': host + '/',
+                'Cookie': useCok
+            }, null);
+            useCok = mergeCookie(useCok, page.cookie);
+            lastHtml = page.body || lastHtml;
+            if (!isOmofunGate(page.body)) {
+                saveOmoCookie(useCok);
+                return { html: page.body, cookie: useCok, verify: tag + '|ok|' + String(ver.resp || '').substring(0, 24) };
+            }
+            cok = useCok;
+            if (ver.ok) break;
         }
-        var ver = omofunVerifyPost(host, pageUrl, cok);
-        if (ver.cookie) cok = mergeCookie(cok, ver.cookie);
-        var page = javaHttp('GET', pageUrl, {
-            'User-Agent': MOBILE_UA,
-            'Referer': host + '/',
-            'Cookie': cok || ''
-        }, null);
-        cok = mergeCookie(cok, page.cookie);
-        if (!isOmofunGate(page.body)) {
-            saveOmoCookie(cok);
-            return { html: page.body, cookie: cok, verify: tag + '|ok|' + String(ver.resp || '').substring(0, 24) };
-        }
-        // 仍门禁：带回 token 便于对照
         saveOmoCookie(cok);
-        if (!ver.ok) {
+        if (lastVer && !lastVer.ok) {
             return {
-                html: page.body || gate.body,
+                html: lastHtml,
                 cookie: cok,
-                verify: tag + '|t=' + String(ver.token || '').substring(0, 14) + '|' + String(ver.resp || '')
+                verify: tag + '|ms=' + omofunNowMs().substring(0, 10) + '|t=' + String(lastVer.token || '').substring(0, 12) + '|' + String(lastVer.resp || '')
             };
         }
     } catch (eJava) {
