@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime21'; // v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime22'; // v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -142,12 +142,19 @@ function loadJsonSites() {
 }
 
 function fetchPage(url, host, cookie) {
+    // 先不带 Cookie：沿用海阔/WebView 会话（①点过继续访问后往往在这里）
     var headers = { 'User-Agent': MOBILE_UA, 'Referer': (host || url) + '/' };
-    if (cookie) headers.Cookie = cookie;
     try {
-        var html = fetch(url, { headers: headers, timeout: 12000 }) || '';
-        if (html && html.substring(0, 5) != 'error') return html;
-    } catch (e) {}
+        var html0 = fetch(url, { headers: headers, timeout: 12000 }) || '';
+        if (html0 && html0.substring(0, 5) != 'error' && !isOmofunGate(html0)) return html0;
+    } catch (e0) {}
+    if (cookie) {
+        headers.Cookie = cookie;
+        try {
+            var html = fetch(url, { headers: headers, timeout: 12000 }) || '';
+            if (html && html.substring(0, 5) != 'error') return html;
+        } catch (e) {}
+    }
     try { return request(url) || ''; } catch (e2) { return ''; }
 }
 
@@ -190,7 +197,7 @@ function pushOmofunManual(d, host, ckName, pageUrl, col) {
                 try { writeFile(COOKIE_DIR + 'Omofun动漫cookie.txt', cok2); } catch (e3) {}
             }
             if (isOmofunGate(passed.html)) {
-                return 'toast://仍在门禁页 cookie=' + (cok2 ? cok2.length : 0) + ' html=' + ((passed.html || '').length) + ' v=' + String(passed.verify || '').substring(0, 40);
+                return 'toast://仍在门禁页 cookie=' + (cok2 ? cok2.length : 0) + ' html=' + ((passed.html || '').length) + ' v=' + String(passed.verify || '').substring(0, 60);
             }
             refreshPage(false);
             return 'hiker://empty';
@@ -243,31 +250,47 @@ function pushCards(d, list, host, col) {
 }
 
 // Omofun「访问过多 / 继续访问」门禁：点按钮实际调 verify_check，不是真验证码
-// 门禁 token 必须用手工 base64：海阔 base64Encode 会弄坏 XOR 后的二进制字符
-function b64enc(str) {
+// token = btoa( Date.now字符串 逐字节 XOR 固定key )；禁止走字符串/UTF-8/base64Encode
+function b64fromBytes(bytes) {
     var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    var out = '', i = 0;
-    while (i < str.length) {
-        var c1 = str.charCodeAt(i++) & 0xff;
-        var c2 = i < str.length ? str.charCodeAt(i++) & 0xff : NaN;
-        var c3 = i < str.length ? str.charCodeAt(i++) & 0xff : NaN;
-        var e1 = c1 >> 2;
-        var e2 = ((c1 & 3) << 4) | (c2 >> 4);
-        var e3 = ((c2 & 15) << 2) | (c3 >> 6);
-        var e4 = c3 & 63;
-        if (isNaN(c2)) { e3 = 64; e4 = 64; }
-        else if (isNaN(c3)) e4 = 64;
-        out += chars.charAt(e1) + chars.charAt(e2) + (e3 == 64 ? '=' : chars.charAt(e3)) + (e4 == 64 ? '=' : chars.charAt(e4));
+    var out = '';
+    var len = bytes.length;
+    for (var i = 0; i < len; i += 3) {
+        var b0 = bytes[i] & 0xff;
+        var has1 = i + 1 < len;
+        var has2 = i + 2 < len;
+        var b1 = has1 ? (bytes[i + 1] & 0xff) : 0;
+        var b2 = has2 ? (bytes[i + 2] & 0xff) : 0;
+        out += chars.charAt(b0 >> 2);
+        out += chars.charAt(((b0 & 3) << 4) | (b1 >> 4));
+        out += has1 ? chars.charAt(((b1 & 15) << 2) | (b2 >> 6)) : '=';
+        out += has2 ? chars.charAt(b2 & 63) : '=';
     }
     return out;
 }
 
 function omofunRefreshToken() {
     var key = [0x4e, 0x3f, 0xa9, 0xc2, 0x12, 0x7d, 0x88, 0xef, 0x55, 0xaa, 0x0b, 0xcd, 0xde, 0xad, 0xbe, 0xef];
-    var f = String(+new Date());
-    var C = '';
-    for (var i = 0; i < f.length; i++) C += String.fromCharCode(f.charCodeAt(i) ^ key[i % key.length]);
-    return b64enc(C);
+    var f = String(new Date().getTime());
+    var bytes = [];
+    for (var i = 0; i < f.length; i++) bytes.push((f.charCodeAt(i) & 0xff) ^ key[i % 16]);
+    try {
+        var arr = null;
+        if (typeof java !== 'undefined') {
+            arr = java.lang.reflect.Array.newInstance(java.lang.Byte.TYPE, bytes.length);
+            for (var j = 0; j < bytes.length; j++) {
+                var v = bytes[j];
+                arr[j] = v > 127 ? v - 256 : v;
+            }
+        }
+        if (arr && typeof android !== 'undefined' && android.util && android.util.Base64) {
+            return String(android.util.Base64.encodeToString(arr, 2));
+        }
+        if (arr && java.util && java.util.Base64) {
+            return String(java.util.Base64.getEncoder().encodeToString(arr));
+        }
+    } catch (eJ) {}
+    return b64fromBytes(bytes);
 }
 
 function isOmofunGate(html) {
@@ -389,38 +412,37 @@ function omofunCookie(host, probe) {
 
 function omofunVerifyPost(host, probe, cok) {
     var token = omofunRefreshToken();
+    var url = host + '/index.php/ajax/verify_check?type=search';
+    // 表单里 + 不能当空格；只替换 + / =，避免二次 encode 把 % 弄坏
+    var formBody = 'i=' + String(token).replace(/\+/g, '%2B').replace(/\//g, '%2F').replace(/=/g, '%3D');
+    var tries = [
+        { headers: { 'User-Agent': MOBILE_UA, 'Referer': probe || (host + '/'), 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }, body: formBody },
+        { headers: { 'User-Agent': MOBILE_UA, 'Referer': probe || (host + '/'), 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: '{"i":"' + token + '"}' }
+    ];
+    if (cok) {
+        tries.push({
+            headers: { 'User-Agent': MOBILE_UA, 'Referer': probe || (host + '/'), 'Cookie': cok, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+            body: formBody
+        });
+        tries.push({
+            headers: { 'User-Agent': MOBILE_UA, 'Referer': probe || (host + '/'), 'Cookie': cok, 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: '{"i":"' + token + '"}'
+        });
+    }
     var resp = '';
-    try {
-        resp = fetch(host + '/index.php/ajax/verify_check?type=search', {
-            headers: {
-                'User-Agent': MOBILE_UA,
-                'Referer': probe,
-                'Cookie': cok || '',
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: 'i=' + encodeURIComponent(token),
-            method: 'POST',
-            timeout: 8000
-        }) || '';
-    } catch (e) {}
-    if (resp.indexOf('"code":1') < 0) {
+    for (var i = 0; i < tries.length; i++) {
         try {
-            resp = fetch(host + '/index.php/ajax/verify_check?type=search', {
-                headers: {
-                    'User-Agent': MOBILE_UA,
-                    'Referer': probe,
-                    'Cookie': cok || '',
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: '{"i":"' + token + '"}',
-                method: 'POST',
-                timeout: 8000
-            }) || resp;
+            resp = fetch(url, { headers: tries[i].headers, body: tries[i].body, method: 'POST', timeout: 8000 }) || '';
+            if (resp.indexOf('"code":1') >= 0) return resp;
+        } catch (e) {}
+        try {
+            if (typeof post === 'function') {
+                resp = post(url, tries[i].body) || resp;
+                if (resp.indexOf('"code":1') >= 0) return resp;
+            }
         } catch (e2) {}
     }
-    return resp;
+    return 't=' + String(token).substring(0, 16) + '|' + String(resp || '').substring(0, 48);
 }
 
 function omofunFetchPassed(host, pageUrl, cookie) {
