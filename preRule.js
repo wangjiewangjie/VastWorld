@@ -1,6 +1,6 @@
 var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
-var RULE_DIR = "hiker://files/rules/xyq/";
+var RULE_DIR = "hiker://files/rules/hksj/";
 var RULE_VER = "v22-anime27";
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
@@ -29,6 +29,10 @@ function fetchRule(url, check) {
   return "";
 }
 
+function stripBom(js) {
+  return js ? (js + "").replace(/^\uFEFF+/, "").replace(/\uFEFF/g, "") : js;
+}
+
 function isCurrentVer(js) {
   return (
     js &&
@@ -53,7 +57,7 @@ function uprulefile(force) {
       return c.search(/\"vodhref\"/) != -1 && c.indexOf("omofun") != -1;
     });
     if (rulejs && rulejson) {
-      writeFile(RULE_DIR + RULE_JS_NAME, rulejs);
+      writeFile(RULE_DIR + RULE_JS_NAME, stripBom(rulejs));
       writeFile(RULE_DIR + RULE_JSON_NAME, rulejson);
       return true;
     }
@@ -85,6 +89,7 @@ function buildUpdateItem() {
           var jnOk = rulejson.indexOf("vodhref") >= 0;
           logs.push(i + 1 + ":" + (rulejs ? rulejs.length : 0) + (jsOk ? "+js" : "") + (jnOk ? "+json" : ""));
           if (!jsOk || !jnOk) continue;
+          rulejs = stripBom(rulejs);
           writeFile(dir + "hikermovie.js", rulejs);
           writeFile(dir + "hikermovie.json", rulejson);
           var check = fetch(dir + "hikermovie.js") || "";
@@ -103,10 +108,10 @@ function buildUpdateItem() {
 
 function loadRules() {
   try {
-    var lac = fetch(RULE_DIR + RULE_JS_NAME) || "";
+    var lac = stripBom(fetch(RULE_DIR + RULE_JS_NAME) || "");
     if (!isCurrentVer(lac)) {
       uprulefile(true);
-      lac = fetch(RULE_DIR + RULE_JS_NAME) || "";
+      lac = stripBom(fetch(RULE_DIR + RULE_JS_NAME) || "");
     }
     if (lac && lac.substring(0, 5) != "error" && lac.search(/lazyRule/) != -1) {
       eval(lac);

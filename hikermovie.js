@@ -1,5 +1,5 @@
-﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
-var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
+// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
+var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
 var RULE_VER = 'v22-anime27'; // v22-anime26 v22-anime25 v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
@@ -9,7 +9,7 @@ var RULE_BASES = [
     'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
     'https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/'
 ];
-var COOKIE_DIR = 'hiker://files/rules/xyq/xqyscookie/';
+var COOKIE_DIR = 'hiker://files/rules/hksj/hksjcookie/';
 var SITE_ICO = 'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3';
 
 // ---------- 站点表（抓取 + 布局配置）----------
@@ -170,7 +170,7 @@ function pushOmofunManual(d, host, ckName, pageUrl, col) {
     d.push({
         title: '② 我已继续访问，重新搜索',
         url: $('hiker://empty#noLoading#').lazyRule((h, name, probe) => {
-            eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+            eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
             var passed = omofunFetchPassed(h, probe, readCookie(h, probe) || '');
             if (passed.cookie) {
                 try { writeFile(COOKIE_DIR + name + 'cookie.txt', passed.cookie); } catch (e2) {}
@@ -220,7 +220,7 @@ function pushCards(d, list, host, col) {
             pic_url: v.img ? imgUrl(v.img, host) : '',
             // 显式传入详情 URL：站点首页 MY_URL=hiker://empty 时，单靠 getResCode/MY_URL 会解析失败
             url: $(v.url + '#noHistory#').rule((name, detailUrl) => {
-                eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 omerj(name, detailUrl);
             }, v.title, v.url),
             col_type: v.img ? (col || 'movie_3_marquee') : 'text_center_1',
@@ -448,7 +448,7 @@ function omofunFetchPassed(host, pageUrl, cookie) {
 
 // ---------- 更新 ----------
 function tryUpdateFrom(bases, ver) {
-    var dir = 'hiker://files/rules/xyq/';
+    var dir = 'hiker://files/rules/hksj/';
     var opt = { headers: { 'User-Agent': MOBILE_UA, 'Cache-Control': 'no-cache', Pragma: 'no-cache' }, timeout: 6000 };
     var logs = [];
     for (var i = 0; i < bases.length; i++) {
@@ -485,22 +485,22 @@ function hikhmrule() {
         d.push({
             title: '引擎 ' + RULE_VER + ' · 点此更新',
             url: $('#noLoading#').lazyRule((bases, ver) => {
-                eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 return tryUpdateFrom(bases, ver);
             }, RULE_BASES, RULE_VER),
             col_type: 'text_center_1'
         });
-        var kw = getMyVar('xyqxqystext', '');
+        var kw = getMyVar('hksjsearchtext', '');
         d.push({
             title: '搜索',
             // $.toString 回调在独立环境执行，必须把路径当参数传入，不能直接引用 RULE_JSON
             url: $.toString((jsonPath) => {
                 return $('hiker://empty#noRecordHistory#$$$' + jsonPath + '$$$' + input + '$$$fypage$$$').rule(() => {
-                    eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                    eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                     hiksearch();
                 });
             }, RULE_JSON),
-            extra: { onChange: "putMyVar('xyqxqystext',input)", defaultValue: kw, titleVisible: true },
+            extra: { onChange: "putMyVar('hksjsearchtext',input)", defaultValue: kw, titleVisible: true },
             col_type: 'input'
         });
         d.push({ col_type: 'line' });
@@ -557,7 +557,7 @@ function hikhmerj() {
                 d.push({
                     title: types[i],
                     url: $(cate).rule((k) => {
-                        eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                        eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                         clsrule(k);
                     }, key),
                     col_type: 'scroll_button'
@@ -624,7 +624,7 @@ function clsrule(key) {
 // ---------- 详情 + 选集（海阔播放器 lazyRule）----------
 function playLazy(host, link, title, playType) {
     return $('hiker://empty#' + host + '#' + link + '#' + title + '#' + playType).lazyRule(() => {
-        eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+        eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
         return omlazy();
     });
 }
@@ -642,7 +642,7 @@ function omerj(movTitle, detailUrl) {
         d.push({
             title: '搜索「' + movTitle + '」',
             url: $('hiker://empty#noHistory#$$$' + RULE_JSON + '$$$' + movTitle + '$$$fypage$$$').rule(() => {
-                eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 hiksearch();
             }),
             col_type: 'flex_button',
@@ -852,7 +852,7 @@ function hiksearch() {
                 img: ico,
                 pic_url: ico,
                 url: $('hiker://empty#noRecordHistory#').rule((ck, k, w, searchUrl) => {
-                    eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                    eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                     hikseaerji(ck, k, w, searchUrl);
                 }, s.title, key, wd, url),
                 col_type: 'icon_2_card'
@@ -862,7 +862,7 @@ function hiksearch() {
         d.push({
             title: '开始聚合搜索',
             url: $('hiker://empty#noRecordHistory#noLoading#').rule((sitesJson, keyWd) => {
-                eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 hikAggSearch(sitesJson, keyWd);
             }, JSON.stringify(sites), wd),
             col_type: 'text_center_1'
@@ -928,7 +928,7 @@ function hikAggSearch(sitesJson, wd) {
                         desc: v.desc || '',
                         pic_url: v.img ? imgUrl(v.img, site.host) : '',
                         url: $(v.url + '#noHistory#').rule((name, detailUrl) => {
-                            eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                            eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                             omerj(name, detailUrl);
                         }, v.title, v.url),
                         col_type: v.img ? 'movie_1_vertical_pic' : 'text_center_1'
@@ -989,7 +989,7 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
                         title: show + (v.desc ? ' ' + v.desc : ''),
                         pic_url: v.img ? imgUrl(v.img, host) : '',
                         url: $(v.url + '#noHistory#').rule((name, detailUrl) => {
-                            eval(fetch('hiker://files/rules/xyq/hikermovie.js'));
+                            eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                             omerj(name, detailUrl);
                         }, v.title, v.url),
                         col_type: v.img ? 'movie_1_vertical_pic' : 'text_center_1'
