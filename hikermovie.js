@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/xyq/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime22'; // v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
+var RULE_VER = 'v22-anime23'; // v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2 v21-anime2 v20-anime2
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -197,7 +197,7 @@ function pushOmofunManual(d, host, ckName, pageUrl, col) {
                 try { writeFile(COOKIE_DIR + 'Omofun动漫cookie.txt', cok2); } catch (e3) {}
             }
             if (isOmofunGate(passed.html)) {
-                return 'toast://仍在门禁页 cookie=' + (cok2 ? cok2.length : 0) + ' html=' + ((passed.html || '').length) + ' v=' + String(passed.verify || '').substring(0, 60);
+                return 'toast://门禁 ' + RULE_VER + ' c=' + (cok2 ? cok2.length : 0) + ' h=' + ((passed.html || '').length) + ' ' + String(passed.verify || '').substring(0, 70);
             }
             refreshPage(false);
             return 'hiker://empty';
@@ -387,23 +387,62 @@ function saveOmoCookie(cok) {
     try { writeFile(COOKIE_DIR + 'Omofun动漫cookie.txt', cok); } catch (e) {}
 }
 
+// 海阔 fetch/post 对门禁 POST 不可靠；用 Java 直连保证 body 真发出去
+function javaHttp(method, url, headers, body) {
+    var conn = new java.net.URL(url).openConnection();
+    conn.setInstanceFollowRedirects(true);
+    conn.setConnectTimeout(12000);
+    conn.setReadTimeout(12000);
+    conn.setRequestMethod(method);
+    if (headers) {
+        for (var k in headers) {
+            if (headers[k] != null && headers[k] !== '') conn.setRequestProperty(k, String(headers[k]));
+        }
+    }
+    if (method == 'POST' && body != null) {
+        conn.setDoOutput(true);
+        var bytes = new java.lang.String(String(body)).getBytes('UTF-8');
+        conn.setRequestProperty('Content-Length', String(bytes.length));
+        var os = conn.getOutputStream();
+        os.write(bytes);
+        os.flush();
+        os.close();
+    }
+    var code = 0;
+    try { code = conn.getResponseCode(); } catch (eC) { code = -1; }
+    var stream = null;
+    try { stream = code >= 400 ? conn.getErrorStream() : conn.getInputStream(); } catch (eS) {}
+    var text = '';
+    if (stream) {
+        var reader = new java.io.BufferedReader(new java.io.InputStreamReader(stream, 'UTF-8'));
+        var sb = new java.lang.StringBuilder();
+        var line;
+        while ((line = reader.readLine()) != null) sb.append(line).append('\n');
+        reader.close();
+        text = String(sb.toString());
+    }
+    var cok = '';
+    try {
+        var fields = conn.getHeaderFields();
+        if (fields) {
+            var keys = fields.keySet().toArray();
+            for (var i = 0; i < keys.length; i++) {
+                var key = keys[i] == null ? '' : String(keys[i]);
+                if (!/^set-cookie$/i.test(key)) continue;
+                var vals = fields.get(keys[i]);
+                if (!vals) continue;
+                for (var j = 0; j < vals.size(); j++) cok = mergeCookie(cok, String(vals.get(j)).split(';')[0]);
+            }
+        }
+    } catch (eH) {}
+    try { conn.disconnect(); } catch (eD) {}
+    return { body: text, cookie: cok, code: code };
+}
+
 function omofunCookie(host, probe) {
     try {
-        probe = cleanHttpUrl(probe) || (host + '/search/a----------1---.html');
-        var cok = '';
-        try { cok = fetch(COOKIE_DIR + 'Omofun动漫cookie.txt', {}) || ''; } catch (e0) {}
-        var home = omoReq(host + '/', host, cok, { timeout: 8000 });
-        cok = home.cookie || cok;
-        var page = omoReq(probe, host, cok, { timeout: 8000 });
-        cok = page.cookie || cok;
-        if (!isOmofunGate(page.html)) {
-            saveOmoCookie(cok);
-            return cok;
-        }
-        omofunVerifyPost(host, probe, cok);
-        cok = readCookie(host, probe) || cok;
-        saveOmoCookie(cok);
-        return cok;
+        var passed = omofunFetchPassed(host, probe, '');
+        return passed.cookie || '';
     } catch (e) {
         logErr('omofunCookie', e);
         return '';
@@ -413,69 +452,117 @@ function omofunCookie(host, probe) {
 function omofunVerifyPost(host, probe, cok) {
     var token = omofunRefreshToken();
     var url = host + '/index.php/ajax/verify_check?type=search';
-    // 表单里 + 不能当空格；只替换 + / =，避免二次 encode 把 % 弄坏
-    var formBody = 'i=' + String(token).replace(/\+/g, '%2B').replace(/\//g, '%2F').replace(/=/g, '%3D');
-    var tries = [
-        { headers: { 'User-Agent': MOBILE_UA, 'Referer': probe || (host + '/'), 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }, body: formBody },
-        { headers: { 'User-Agent': MOBILE_UA, 'Referer': probe || (host + '/'), 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: '{"i":"' + token + '"}' }
-    ];
-    if (cok) {
-        tries.push({
-            headers: { 'User-Agent': MOBILE_UA, 'Referer': probe || (host + '/'), 'Cookie': cok, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
-            body: formBody
-        });
-        tries.push({
-            headers: { 'User-Agent': MOBILE_UA, 'Referer': probe || (host + '/'), 'Cookie': cok, 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: '{"i":"' + token + '"}'
-        });
+    var headers = {
+        'User-Agent': MOBILE_UA,
+        'Referer': probe || (host + '/'),
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest'
+    };
+    if (cok) headers.Cookie = cok;
+    var formBody = '';
+    try {
+        formBody = 'i=' + String(java.net.URLEncoder.encode(String(token), 'UTF-8'));
+    } catch (eEnc) {
+        formBody = 'i=' + String(token).replace(/\+/g, '%2B').replace(/\//g, '%2F').replace(/=/g, '%3D');
     }
     var resp = '';
-    for (var i = 0; i < tries.length; i++) {
-        try {
-            resp = fetch(url, { headers: tries[i].headers, body: tries[i].body, method: 'POST', timeout: 8000 }) || '';
-            if (resp.indexOf('"code":1') >= 0) return resp;
-        } catch (e) {}
-        try {
-            if (typeof post === 'function') {
-                resp = post(url, tries[i].body) || resp;
-                if (resp.indexOf('"code":1') >= 0) return resp;
-            }
-        } catch (e2) {}
-    }
-    return 't=' + String(token).substring(0, 16) + '|' + String(resp || '').substring(0, 48);
+    // 1) Java 直连（主路径）
+    try {
+        var jr = javaHttp('POST', url, headers, formBody);
+        resp = jr.body || '';
+        if (resp.indexOf('"code":1') >= 0) return { ok: true, resp: resp, token: token, cookie: jr.cookie || '' };
+    } catch (eJ) { resp = 'java:' + eJ; }
+    // 2) 海阔官方 post：body 用对象，由软件拼 form
+    try {
+        resp = post(url, {
+            headers: headers,
+            body: { i: token },
+            timeout: 8000
+        }) || resp;
+        if (String(resp).indexOf('"code":1') >= 0) return { ok: true, resp: String(resp), token: token, cookie: '' };
+    } catch (eP) {}
+    // 3) fetch 字符串 body
+    try {
+        resp = fetch(url, {
+            headers: headers,
+            body: formBody,
+            method: 'POST',
+            timeout: 8000
+        }) || resp;
+        if (String(resp).indexOf('"code":1') >= 0) return { ok: true, resp: String(resp), token: token, cookie: '' };
+    } catch (eF) {}
+    return {
+        ok: false,
+        resp: String(resp || '').substring(0, 80),
+        token: token,
+        cookie: ''
+    };
 }
 
 function omofunFetchPassed(host, pageUrl, cookie) {
-    // 优先浏览器/海阔实时 Cookie，文件里往往是未验证的旧会话
+    pageUrl = cleanHttpUrl(pageUrl) || (host + '/search/a----------1---.html');
     var live = readCookie(host, pageUrl);
     var fileC = '';
     try { fileC = fetch(COOKIE_DIR + 'Omofun动漫cookie.txt', {}) || ''; } catch (e0) {}
     var cok = live || cookie || fileC || '';
+    var tag = RULE_VER;
 
-    // 最终正文一律普通 fetch，避免 withHeaders 干扰
+    // A. 先走 Java 完整会话：建 PHPSESSID → 打 verify_check → 再拉列表
+    try {
+        var home = javaHttp('GET', host + '/', { 'User-Agent': MOBILE_UA, 'Cookie': cok || '' }, null);
+        cok = mergeCookie(cok, home.cookie);
+        var gate = javaHttp('GET', pageUrl, {
+            'User-Agent': MOBILE_UA,
+            'Referer': host + '/',
+            'Cookie': cok || ''
+        }, null);
+        cok = mergeCookie(cok, gate.cookie);
+        if (!isOmofunGate(gate.body)) {
+            saveOmoCookie(cok);
+            return { html: gate.body, cookie: cok, verify: tag + '|skip' };
+        }
+        var ver = omofunVerifyPost(host, pageUrl, cok);
+        if (ver.cookie) cok = mergeCookie(cok, ver.cookie);
+        var page = javaHttp('GET', pageUrl, {
+            'User-Agent': MOBILE_UA,
+            'Referer': host + '/',
+            'Cookie': cok || ''
+        }, null);
+        cok = mergeCookie(cok, page.cookie);
+        if (!isOmofunGate(page.body)) {
+            saveOmoCookie(cok);
+            return { html: page.body, cookie: cok, verify: tag + '|ok|' + String(ver.resp || '').substring(0, 24) };
+        }
+        // 仍门禁：带回 token 便于对照
+        saveOmoCookie(cok);
+        if (!ver.ok) {
+            return {
+                html: page.body || gate.body,
+                cookie: cok,
+                verify: tag + '|t=' + String(ver.token || '').substring(0, 14) + '|' + String(ver.resp || '')
+            };
+        }
+    } catch (eJava) {
+        tag = RULE_VER + '|javaErr:' + String(eJava).substring(0, 30);
+    }
+
+    // B. 回落海阔 fetch
     var html = fetchPage(pageUrl, host, cok);
     if (!isOmofunGate(html)) {
         cok = readCookie(host, pageUrl) || cok;
         saveOmoCookie(cok);
-        return { html: html, cookie: cok, verify: 'skip' };
+        return { html: html, cookie: cok, verify: tag + '|fetchSkip' };
     }
-
-    // 先对当前会话打 verify_check（网页点过继续访问后，用 live cookie 通常直接过）
-    var resp = omofunVerifyPost(host, pageUrl, cok);
-    cok = readCookie(host, pageUrl) || cok;
-    html = fetchPage(pageUrl, host, cok);
-    if (!isOmofunGate(html)) {
-        saveOmoCookie(cok);
-        return { html: html, cookie: cok, verify: resp };
-    }
-
-    // 再完整走一遍建会话 + check
-    cok = omofunCookie(host, pageUrl) || cok;
-    resp = omofunVerifyPost(host, pageUrl, cok);
+    var ver2 = omofunVerifyPost(host, pageUrl, cok);
+    if (ver2.cookie) cok = mergeCookie(cok, ver2.cookie);
     cok = readCookie(host, pageUrl) || cok;
     html = fetchPage(pageUrl, host, cok);
     saveOmoCookie(cok);
-    return { html: html, cookie: cok, verify: resp };
+    return {
+        html: html,
+        cookie: cok,
+        verify: tag + '|t=' + String(ver2.token || '').substring(0, 14) + '|' + String(ver2.resp || '').substring(0, 48)
+    };
 }
 
 // ---------- 更新 ----------
