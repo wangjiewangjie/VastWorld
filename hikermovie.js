@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime30'; // v22-anime29 v22-anime28 v22-anime27 v22-anime26 v22-anime25 v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2
+var RULE_VER = 'v22-anime32'; // v22-anime31 v22-anime30 v22-anime29 v22-anime28 v22-anime27 v22-anime26 v22-anime25 v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2
 var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
@@ -95,27 +95,29 @@ var SITES = {
         search: '{host}/vodsearch/{wd}----------fypage---.html',
         // 首页易卡住，进站直接走分类
         skipHome: true,
-        list: 'body&&.module-poster-item',
+        list: 'body&&.module-poster-item||body&&.module-item.module-poster-item',
         img: 'img&&data-original||.lazyload&&data-original||img&&data-src||img&&src',
-        title: 'a&&title||.module-poster-item-title&&Text||strong&&Text||img&&alt',
+        title: 'a&&title||.module-poster-item-title&&Text||img&&alt||Text',
         desc: '.module-item-note&&Text||.module-item-text&&Text||span&&Text',
-        url: 'a&&href',
+        url: 'a&&href||href',
         tabs: 'body&&#y-playList&&.module-tab-item||body&&.module-tab-item',
         conts: 'body&&.module-play-list-content',
         play: 'aaaa'
     },
     amj85: {
         title: '爱美剧',
-        host: 'https://amj85.com',
+        // aimeiju.org 返回未压缩 HTML，比 amj85.com 的 br/zstd 更稳
+        host: 'https://aimeiju.org',
+        altHosts: ['https://amj85.com', 'https://www.aimeiju.org'],
         cate: '{host}/vodtype/{id}-fypage.html[firstPage={host}/vodtype/{id}.html]',
         search: '{host}/vodsearch/{wd}----------fypage---.html',
         // 首页常回 zstd 乱码，进站直接走分类
         skipHome: true,
-        list: 'body&&.film-card',
+        list: 'body&&.film-card||body&&.module-items&&.film-card',
         img: 'img&&src||img&&data-src||img&&data-original',
         title: 'h3&&a&&Text||a&&title||img&&alt||a&&Text',
         desc: '.film-state&&Text||p&&Text||span&&Text',
-        url: 'a.poster-link&&href||a&&href',
+        url: 'a&&href',
         tabs: 'body&&.amj-source-option||body&&[data-detail-source]',
         conts: 'body&&[data-pk-source-panel]||body&&.module-play-list-content',
         play: 'aaaa'
@@ -214,8 +216,14 @@ function siteHostKey(host) {
 
 function resolveSiteByHost(host, pageUrl) {
     var blob = ((host || '') + ' ' + (pageUrl || '')).toLowerCase();
+    if (/aimeiju|amj85/.test(blob)) return SITES.amj85;
+    if (/dy555|555dy|555yy|555kan/.test(blob)) return SITES.dy555;
     for (var k in SITES) {
         if (blob.indexOf(siteHostKey(SITES[k].host).toLowerCase()) >= 0) return SITES[k];
+        var alts = SITES[k].altHosts || [];
+        for (var i = 0; i < alts.length; i++) {
+            if (blob.indexOf(siteHostKey(alts[i]).toLowerCase()) >= 0) return SITES[k];
+        }
     }
     return null;
 }
@@ -263,33 +271,60 @@ function isProbablyHtml(html) {
     // gzip / zstd 魔数：海阔未解压时当失败
     if (c0 == 0x1f && c1 == 0x8b) return false;
     if (c0 == 0x28 && c1 == 0xb5) return false;
-    var head = html.substring(0, 800);
-    return /<!doctype|<html|<body|<head|class="/i.test(head);
+    // 不限前 800 字：部分站 head 很长，标记在后面
+    var head = html.substring(0, 4000);
+    if (/<!doctype|<html|<body|<head|module-poster|film-card|stui-vodlist|video-pic|voddetail|lazyload/i.test(head)) return true;
+    return html.length > 3000 && /href=|<\/div>|<a /i.test(head);
 }
 
 function fetchPage(url, host, cookie) {
+    // 先裸请求：部分机型对自定义 header / Accept-Encoding 会拿回压缩脏数据
+    try {
+        var bare = fetch(url, { timeout: 10000 }) || '';
+        if (isProbablyHtml(bare) && !isOmofunGate(bare)) return bare;
+    } catch (eBare) {}
     var headers = {
         'User-Agent': MOBILE_UA,
-        'Referer': (host || url) + '/',
-        'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        'Accept-Language': 'zh-CN,zh;q=0.9'
+        'Referer': (host || url) + '/'
     };
     try {
-        var html0 = fetch(url, { headers: headers, timeout: 8000 }) || '';
+        var html0 = fetch(url, { headers: headers, timeout: 10000 }) || '';
         if (isProbablyHtml(html0) && !isOmofunGate(html0)) return html0;
     } catch (e0) {}
     if (cookie) {
         headers.Cookie = cookie;
         try {
-            var html = fetch(url, { headers: headers, timeout: 8000 }) || '';
+            var html = fetch(url, { headers: headers, timeout: 10000 }) || '';
             if (isProbablyHtml(html)) return html;
         } catch (e) {}
     }
     try {
         var html2 = request(url) || '';
-        return isProbablyHtml(html2) ? html2 : '';
+        if (isProbablyHtml(html2)) return html2;
+        if (html2 && html2.length > 5000 && html2.substring(0, 5) != 'error') return html2;
+        return '';
     } catch (e2) { return ''; }
+}
+
+function swapHost(url, fromHost, toHost) {
+    if (!url || !toHost) return url;
+    var from = siteHostKey(fromHost || '');
+    var to = (toHost + '').replace(/\/$/, '');
+    if (!from) return url.replace(/^(https?:\/\/)[^\/]+/i, to);
+    return (url + '').split(from).join(siteHostKey(to));
+}
+
+function fetchSiteHtml(site, pageUrl) {
+    var html = fetchPage(pageUrl, site.host);
+    if (isProbablyHtml(html) && html.length > 800) return html;
+    var alts = site.altHosts || [];
+    for (var i = 0; i < alts.length; i++) {
+        var u = swapHost(pageUrl, site.host, alts[i]);
+        if (!u || u == pageUrl) continue;
+        html = fetchPage(u, alts[i]);
+        if (isProbablyHtml(html) && html.length > 800) return html;
+    }
+    return html || '';
 }
 
 function cleanHttpUrl(u) {
@@ -321,9 +356,52 @@ function pushOmofunManual(d, host, ckName, pageUrl, col) {
     });
 }
 
+function isDetailHref(full) {
+    if (!full) return false;
+    if (/\/(voddetail|vodplay|post|content|detail|anime|video)\//i.test(full)) return true;
+    if (/\/html\/\d+/i.test(full) || /\/post\/\d+/i.test(full) || /\/content\/\d+/i.test(full)) return true;
+    if (/\/(type|show|label|mangatype|arttype|list|class|vodtype|vodshow|category)\//i.test(full)) return false;
+    return true;
+}
+
+function parseListFallback(html, host) {
+    var out = [];
+    var seen = {};
+    if (!html) return out;
+    // title 在前 / href 在前 两种 <a>
+    var re = /<a\b[^>]*?(?:title="([^"]+)"[^>]*?href="([^"]+)"|href="([^"]+)"[^>]*?title="([^"]+)")[^>]*>/gi;
+    var m;
+    while ((m = re.exec(html)) && out.length < 60) {
+        var title = (m[1] || m[4] || '').replace(/^\s+|\s+$/g, '');
+        var href = m[2] || m[3] || '';
+        if (!href || /javascript:/i.test(href)) continue;
+        if (!title || title.length > 80) continue;
+        if (/首页|登录|注册|排行|筛选|更多|下一页|上一页/i.test(title)) continue;
+        var full = absUrl(href, host);
+        if (!full || !/^https?:/i.test(full) || seen[full]) continue;
+        if (!/\/(voddetail|post|html|content|detail|anime)\//i.test(full) && !/\/html\/\d+/i.test(full)) continue;
+        if (!isDetailHref(full)) continue;
+        seen[full] = 1;
+        out.push({ title: title, img: '', desc: '', url: full });
+    }
+    // 爱美剧 film-card：title 在 h3，href 在 poster-link
+    if (!out.length) {
+        var re2 = /<article[^>]*class="[^"]*film-card[\s\S]*?href="(\/voddetail\/[^"]+)"[\s\S]*?<h3>\s*<a[^>]*>([^<]+)</gi;
+        while ((m = re2.exec(html)) && out.length < 60) {
+            var full2 = absUrl(m[1], host);
+            var t2 = (m[2] || '').replace(/^\s+|\s+$/g, '');
+            if (!full2 || !t2 || seen[full2]) continue;
+            seen[full2] = 1;
+            out.push({ title: t2, img: '', desc: '', url: full2 });
+        }
+    }
+    return out;
+}
+
 function parseList(html, site, host) {
     var items = firstPdfa(html, site.list);
     var out = [];
+    var seen = {};
     for (var i = 0; i < items.length; i++) {
         var title = firstPdfh(items[i], site.title);
         var img = firstPdfh(items[i], site.img);
@@ -333,11 +411,9 @@ function parseList(html, site, host) {
         if (!href || /javascript:/i.test(href)) continue;
         if (!title) continue;
         var full = absUrl(href, host);
-        if (!full || !/^https?:/i.test(full)) continue;
-        // 丢掉导航分类链（保留详情/播放）
-        if (/\/(type|show|label|mangatype|arttype|list|class|vodtype|vodshow)\//i.test(full) &&
-            !/\/(detail|anime|video|voddetail|vodplay|post|html|content|play)\//i.test(full) &&
-            !/\/html\/\d+/i.test(full) && !/\/post\/\d+/i.test(full) && !/\/content\/\d+/i.test(full)) continue;
+        if (!full || !/^https?:/i.test(full) || seen[full]) continue;
+        if (!isDetailHref(full)) continue;
+        seen[full] = 1;
         out.push({
             title: title,
             img: absUrl(img, host),
@@ -346,6 +422,7 @@ function parseList(html, site, host) {
         });
         if (out.length >= 60) break;
     }
+    if (!out.length) out = parseListFallback(html, host);
     return out;
 }
 
@@ -714,18 +791,18 @@ function hikhmerj() {
         var list = [];
         // 部分站首页 zstd/慢速，跳过首页直接拉分类
         if (pn == 1 && !site.skipHome) {
-            html = fetchPage(host + '/', host);
+            html = fetchSiteHtml(site, host + '/');
             list = parseList(html, site, host);
         }
         // 首页拉空 / 翻页 / skipHome：用分类页
         if (!list.length && ids[0]) {
             var fallback = cateUrl(site, host, ids[0], pn);
-            html = fetchPage(fallback, host);
+            html = fetchSiteHtml(site, fallback);
             list = parseList(html, site, host);
         }
         // 再兜底：换第二个分类试一次
         if (!list.length && ids[1] && pn == 1) {
-            html = fetchPage(cateUrl(site, host, ids[1], 1), host);
+            html = fetchSiteHtml(site, cateUrl(site, host, ids[1], 1));
             list = parseList(html, site, host);
         }
         if (!list.length) {
@@ -764,14 +841,14 @@ function clsrule(key, pageUrl) {
                 if (isProbablyHtml(gr)) html = gr;
             } catch (e) {}
         }
-        if (!html && target) html = fetchPage(target, host);
-        if (!html && /^https?:/i.test(MY_URL || '')) html = fetchPage(MY_URL, host);
+        if (!html && target) html = fetchSiteHtml(site, target);
+        if (!html && /^https?:/i.test(MY_URL || '')) html = fetchSiteHtml(site, MY_URL);
         try { refreshX5WebView(''); } catch (e) {}
         var list = parseList(html, site, host);
         if (!list.length) {
             d.push({
-                title: '分类无数据 · html=' + ((html || '').length),
-                url: MY_URL,
+                title: '分类无数据 · html=' + ((html || '').length) + (target ? ' · ' + target : ''),
+                url: target || host + '/',
                 col_type: 'text_center_1'
             });
         } else {
