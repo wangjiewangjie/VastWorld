@@ -1,7 +1,8 @@
-var RULE_JS_NAME = "hikermovie.js";
+﻿var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/hksj/";
-var RULE_VER = "v22-anime27";
+var RULE_VER = "v22-anime28";
+var RULE_JS_MAX = 70000;
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
 var RULE_BASES = [
@@ -38,8 +39,8 @@ function isCurrentVer(js) {
     js &&
     js.indexOf(RULE_VER) != -1 &&
     js.indexOf("lazyRule") != -1 &&
-    js.length < 45000 &&
-    !(new RegExp(("wwgz" + ".cn") + "|" + ("gang" + "juwang"))).test(js)
+    js.length < RULE_JS_MAX &&
+    !(new RegExp("wwgz" + ".cn")).test(js)
   );
 }
 
@@ -84,8 +85,8 @@ function buildUpdateItem() {
           var jsOk =
             rulejs.indexOf(ver) >= 0 &&
             rulejs.indexOf("pageNum") >= 0 &&
-            rulejs.length < 45000 &&
-            !(new RegExp(("wwgz" + ".cn") + "|" + ("gang" + "juwang"))).test(rulejs);
+            rulejs.length < RULE_JS_MAX &&
+            !(new RegExp("wwgz" + ".cn")).test(rulejs);
           var jnOk = rulejson.indexOf("vodhref") >= 0;
           logs.push(i + 1 + ":" + (rulejs ? rulejs.length : 0) + (jsOk ? "+js" : "") + (jnOk ? "+json" : ""));
           if (!jsOk || !jnOk) continue;

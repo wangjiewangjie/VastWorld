@@ -1,5 +1,5 @@
 {
-  "note": "仅 Omofun动漫 + 樱花动漫；进站用站点 key，播放走海阔 lazyRule",
+  "note": "动漫 + 影视多站；进站用站点 key，播放走海阔 lazyRule",
   "content": "",
   "version": "22",
   "data": [
@@ -21,6 +21,51 @@
           "vodhref": "guoman&riman&oman&dmfilm",
           "ico": "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3",
           "url": "https://www.vtt6.com"
+        }
+      ]
+    },
+    {
+      "type": "影视",
+      "list": [
+        {
+          "title": "看戏哥",
+          "key": "kanxige",
+          "vodtype": "电影&电视剧&综艺&动漫&短剧",
+          "vodhref": "1&2&3&4&21",
+          "ico": "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3",
+          "url": "https://www.kanxige.com"
+        },
+        {
+          "title": "看戏网",
+          "key": "kanxit",
+          "vodtype": "电影&国产剧&综艺&动漫&短剧",
+          "vodhref": "1&13&3&4&26",
+          "ico": "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3",
+          "url": "https://www.kanxit.com"
+        },
+        {
+          "title": "港剧网",
+          "key": "gangju",
+          "vodtype": "电影&电视剧&综艺&动漫",
+          "vodhref": "1&2&3&4",
+          "ico": "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3",
+          "url": "https://www.gangjuwang.tv"
+        },
+        {
+          "title": "555电影",
+          "key": "dy555",
+          "vodtype": "电影&连续剧&综艺&动漫&短剧",
+          "vodhref": "1&2&3&4&126",
+          "ico": "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3",
+          "url": "https://dy555.org"
+        },
+        {
+          "title": "爱美剧",
+          "key": "amj85",
+          "vodtype": "电影&连续剧&综艺&动漫&短剧",
+          "vodhref": "1&2&3&4&126",
+          "ico": "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3",
+          "url": "https://amj85.com"
         }
       ]
     }

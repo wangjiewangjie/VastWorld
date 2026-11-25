@@ -1,7 +1,8 @@
-// hikermovie v22 — 仅 Omofun / 樱花动漫，海阔 lazyRule 播放
+﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime27'; // v22-anime26 v22-anime25 v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2
+var RULE_VER = 'v22-anime28'; // v22-anime27 v22-anime26 v22-anime25 v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2
+var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
@@ -43,6 +44,76 @@ var SITES = {
         tabs: 'body&&.playlist&&.tabs&&a',
         conts: 'body&&.playlist&&.row',
         play: 'sniff'
+    },
+    kanxige: {
+        title: '看戏哥',
+        host: 'https://www.kanxige.com',
+        cate: '{host}/list/{id}-fypage.html[firstPage={host}/list/{id}.html]',
+        search: '{host}/search/{wd}----------fypage---.html',
+        list: 'body&&.stui-vodlist&&li',
+        img: 'a&&data-original||.lazyload&&data-original||img&&data-original||img&&src',
+        title: 'a&&title||h4&&a&&Text||a&&Text',
+        desc: '.pic-text&&Text||.score&&Text||span&&Text',
+        url: 'a&&href',
+        tabs: 'body&&.stui-vodlist__head',
+        conts: 'body&&.stui-content__playlist||body&&.stui-play__list',
+        play: 'sniff'
+    },
+    kanxit: {
+        title: '看戏网',
+        host: 'https://www.kanxit.com',
+        cate: '{host}/class/{id}/page/fypage/[firstPage={host}/class/{id}/]',
+        search: '{host}/so/{wd}-------------/',
+        list: 'body&&.stui-vodlist&&li',
+        img: 'a&&data-original||.lazyload&&data-original||img&&data-original||img&&src',
+        title: 'a&&title||h4&&a&&Text||a&&Text',
+        desc: '.pic-text&&Text||.score&&Text||span&&Text',
+        url: 'a&&href',
+        tabs: 'body&&.stui-vodlist__head',
+        conts: 'body&&.stui-content__playlist||body&&.stui-play__list',
+        play: 'aaaa'
+    },
+    gangju: {
+        title: '港剧网',
+        host: 'https://www.gangjuwang.tv',
+        cate: '{host}/type/{id}-fypage.html[firstPage={host}/type/{id}.html]',
+        search: '{host}/search/{wd}----------fypage---.html',
+        list: 'body&&ul.item&&li||body&&.col-md-2',
+        img: 'a&&data-original||.video-pic&&data-original||img&&data-original||img&&src',
+        title: 'a&&title||h5&&a&&Text||.title&&a&&Text||a&&Text',
+        desc: '.note&&Text||.subtitle&&Text||span&&Text',
+        url: 'a&&href',
+        tabs: 'body&&.playlist-mobile&&li||body&&.playlist&&li',
+        conts: 'body&&[id^=con_playlist]',
+        play: 'aaaa'
+    },
+    dy555: {
+        title: '555电影',
+        host: 'https://dy555.org',
+        cate: '{host}/vodtype/{id}-fypage.html[firstPage={host}/vodtype/{id}.html]',
+        search: '{host}/vodsearch/{wd}----------fypage---.html',
+        list: 'body&&.module-poster-item||body&&.module-item',
+        img: 'img&&data-original||.lazyload&&data-original||img&&data-src||img&&src',
+        title: 'a&&title||.module-poster-item-title&&Text||strong&&Text||img&&alt',
+        desc: '.module-item-note&&Text||.module-item-text&&Text||span&&Text',
+        url: 'a&&href',
+        tabs: 'body&&#y-playList&&.module-tab-item||body&&.module-tab-item',
+        conts: 'body&&.module-play-list-content',
+        play: 'aaaa'
+    },
+    amj85: {
+        title: '爱美剧',
+        host: 'https://amj85.com',
+        cate: '{host}/vodtype/{id}-fypage.html[firstPage={host}/vodtype/{id}.html]',
+        search: '{host}/vodsearch/{wd}----------fypage---.html',
+        list: 'body&&.film-card||body&&.module-poster-item',
+        img: 'img&&src||img&&data-src||img&&data-original',
+        title: 'h3&&a&&Text||a&&title||img&&alt||a&&Text',
+        desc: '.film-state&&Text||p&&Text||span&&Text',
+        url: 'a.poster-link&&href||a&&href',
+        tabs: 'body&&.amj-source-option||body&&[data-detail-source]',
+        conts: 'body&&[data-pk-source-panel]||body&&.module-play-list-content',
+        play: 'aaaa'
     }
 };
 
@@ -132,13 +203,52 @@ function getSite(key) {
     return SITES[key] || null;
 }
 
-function loadJsonSites() {
+function siteHostKey(host) {
+    return (host || '').replace(/^https?:\/\//i, '').replace(/\/$/, '');
+}
+
+function resolveSiteByHost(host, pageUrl) {
+    var blob = ((host || '') + ' ' + (pageUrl || '')).toLowerCase();
+    for (var k in SITES) {
+        if (blob.indexOf(siteHostKey(SITES[k].host).toLowerCase()) >= 0) return SITES[k];
+    }
+    return null;
+}
+
+function siteKeyOf(item) {
+    if (item && item.key && SITES[item.key]) return item.key;
+    var url = ((item && item.url) || '').toLowerCase();
+    for (var k in SITES) {
+        if (url.indexOf(siteHostKey(SITES[k].host).toLowerCase()) >= 0) return k;
+    }
+    return '';
+}
+
+function defaultSiteList() {
+    var out = [];
+    for (var k in SITES) {
+        out.push({ title: SITES[k].title, key: k, url: SITES[k].host, ico: SITE_ICO });
+    }
+    return out;
+}
+
+function loadJsonGroups() {
     try {
         var json = JSON.parse(fetch(RULE_JSON, {}));
-        return ((json.data || [])[0] || {}).list || [];
+        return json.data || [];
     } catch (e) {
         return [];
     }
+}
+
+function loadJsonSites() {
+    var groups = loadJsonGroups();
+    var out = [];
+    for (var i = 0; i < groups.length; i++) {
+        var list = (groups[i] && groups[i].list) || [];
+        for (var j = 0; j < list.length; j++) out.push(list[j]);
+    }
+    return out;
 }
 
 function fetchPage(url, host, cookie) {
@@ -199,8 +309,10 @@ function parseList(html, site, host) {
         if (!title) continue;
         var full = absUrl(href, host);
         if (!full || !/^https?:/i.test(full)) continue;
-        // 丢掉导航分类链（保留 /detail/ /anime/ /play/）
-        if (/\/(type|show|label|mangatype|arttype)\//i.test(full) && !/\/(detail|anime|video|vod|play)\//i.test(full)) continue;
+        // 丢掉导航分类链（保留详情/播放）
+        if (/\/(type|show|label|mangatype|arttype|list|class|vodtype|vodshow)\//i.test(full) &&
+            !/\/(detail|anime|video|voddetail|vodplay|post|html|content|play)\//i.test(full) &&
+            !/\/html\/\d+/i.test(full) && !/\/post\/\d+/i.test(full) && !/\/content\/\d+/i.test(full)) continue;
         out.push({
             title: title,
             img: absUrl(img, host),
@@ -458,8 +570,8 @@ function tryUpdateFrom(bases, ver) {
             if (js.substring(0, 5) == 'error') js = '';
             if (jn.substring(0, 5) == 'error') jn = '';
             // 黑名单域名拆开写，避免字面量出现在本文件里导致自检失败
-            var bad = ('wwgz' + '.cn') + '|' + ('gang' + 'juwang');
-            var jsOk = js && js.indexOf(ver) >= 0 && js.indexOf('pageNum') >= 0 && js.length < 45000 && !new RegExp(bad).test(js);
+            var bad = ('wwgz' + '.cn');
+            var jsOk = js && js.indexOf(ver) >= 0 && js.indexOf('pageNum') >= 0 && js.length < RULE_JS_MAX && !new RegExp(bad).test(js);
             var jnOk = jn && jn.indexOf('vodhref') >= 0;
             var tag = bases[i].indexOf('192.168.') >= 0 ? 'lan' : (bases[i].indexOf('gitee') >= 0 ? 'gitee' : (bases[i].indexOf('ghfast') >= 0 ? 'ghfast' : 'gh'));
             logs.push(tag + ':' + (js ? js.length : 0) + (jsOk ? '+js' : '') + (jnOk ? '+json' : ''));
@@ -505,23 +617,28 @@ function hikhmrule() {
         });
         d.push({ col_type: 'line' });
 
-        var sites = loadJsonSites();
-        if (!sites.length) {
-            sites = [
-                { title: 'Omofun动漫', key: 'omofun', url: SITES.omofun.host, vodtype: '日漫&国漫&动画&剧场&特摄&美漫', vodhref: '1&2&5&24&4&3' },
-                { title: '樱花动漫', key: 'vtt6', url: SITES.vtt6.host, vodtype: '国产动漫&日本动漫&欧美动漫&动漫电影', vodhref: 'guoman&riman&oman&dmfilm' }
-            ];
+        var groups = loadJsonGroups();
+        if (!groups.length) {
+            groups = [{ type: '', list: defaultSiteList() }];
         }
-        for (var i = 0; i < sites.length; i++) {
-            var s = sites[i];
-            var key = s.key || ( /omo/i.test(s.url || '') ? 'omofun' : 'vtt6');
-            d.push({
-                title: s.title || key,
-                img: (s.ico || SITE_ICO) + '@Referer=',
-                // 只用站点 key，避免把 http URL 塞进 MY_URL
-                url: 'hiker://empty#noRecordHistory#$$' + key + '$$fypage$$' + (s.vodtype || '') + '$$' + (s.vodhref || ''),
-                col_type: 'icon_2_card'
-            });
+        for (var g = 0; g < groups.length; g++) {
+            var group = groups[g] || {};
+            var sites = group.list || [];
+            if (group.type) {
+                d.push({ title: '—— ' + group.type + ' ——', url: 'hiker://empty', col_type: 'text_center_1' });
+            }
+            for (var i = 0; i < sites.length; i++) {
+                var s = sites[i];
+                var key = siteKeyOf(s);
+                if (!key) continue;
+                d.push({
+                    title: s.title || key,
+                    img: (s.ico || SITE_ICO) + '@Referer=',
+                    // 只用站点 key，避免把 http URL 塞进 MY_URL
+                    url: 'hiker://empty#noRecordHistory#$$' + key + '$$fypage$$' + (s.vodtype || '') + '$$' + (s.vodhref || ''),
+                    col_type: 'icon_2_card'
+                });
+            }
         }
     } catch (e) {
         d.push(errItem('home', e));
@@ -599,7 +716,11 @@ function clsrule(key) {
     try {
         key = key || '';
         var site = getSite(key);
-        if (!site) site = getSite('omofun');
+        if (!site) {
+            d.push({ title: '未知分类站点: ' + key, col_type: 'text_center_1' });
+            setHomeResult(res);
+            return;
+        }
         var host = site.host;
         var html = '';
         try { html = getResCode() || ''; } catch (e) {}
@@ -664,22 +785,14 @@ function omerj(movTitle, detailUrl) {
             var m = (pageUrl + '/').match(/(https?:\/\/[^\/\s]+)/i);
             host = m ? m[1] : '';
         } catch (e) {}
-        var site = /omofuna|omofun/i.test(host + pageUrl) ? SITES.omofun : (/vtt6/i.test(host + pageUrl) ? SITES.vtt6 : null);
-        if (!site) {
-            for (var k in SITES) {
-                if (host && host.indexOf(SITES[k].host.replace(/^https?:\/\//, '')) != -1) {
-                    site = SITES[k];
-                    break;
-                }
-            }
-        }
+        var site = resolveSiteByHost(host, pageUrl);
         if (!site) site = SITES.omofun;
         if (!host) host = site.host;
 
         // 有真实详情 URL 时直接抓，不信任从 hiker://empty 父页带过来的 getResCode
         var html = '';
         if (pageUrl) html = fetchPage(pageUrl, host) || '';
-        if (!html || html.length < 800 || !/(play-list|playlist|player_aaaa|channel-tab)/i.test(html)) {
+        if (!html || html.length < 800 || !/(play-list|playlist|player_aaaa|channel-tab|stui-content__playlist|stui-play__list|module-play-list|con_playlist|pk-episodes|amj-source)/i.test(html)) {
             try {
                 var gr = (getResCode() || '').replace(/<!--([\S\s]*?)-->/g, '');
                 if (gr && gr.length > html.length) html = gr;
@@ -829,15 +942,10 @@ function hiksearch() {
             col_type: 'text_center_1'
         });
         var sites = loadJsonSites();
-        if (!sites.length) {
-            sites = [
-                { title: 'Omofun动漫', key: 'omofun', url: SITES.omofun.host, ico: SITE_ICO },
-                { title: '樱花动漫', key: 'vtt6', url: SITES.vtt6.host, ico: SITE_ICO }
-            ];
-        }
+        if (!sites.length) sites = defaultSiteList();
         for (var i = 0; i < sites.length; i++) {
             var s = sites[i];
-            var key = s.key || (/omo/i.test(s.url || '') ? 'omofun' : 'vtt6');
+            var key = siteKeyOf(s);
             var site = getSite(key);
             if (!site) continue;
             var url = fillTpl(site.search, {
@@ -882,17 +990,12 @@ function hikAggSearch(sitesJson, wd) {
         d.push({ title: '聚合「' + wd + '」', col_type: 'text_center_1' });
         var sites = [];
         try { sites = JSON.parse(sitesJson || '[]'); } catch (e) { sites = []; }
-        if (!sites.length) {
-            sites = [
-                { title: 'Omofun动漫', key: 'omofun' },
-                { title: '樱花动漫', key: 'vtt6' }
-            ];
-        }
+        if (!sites.length) sites = defaultSiteList();
         var hit = 0;
         for (var i = 0; i < sites.length; i++) {
             try {
                 var s = sites[i];
-                var key = s.key || (/omo/i.test(s.url || '') ? 'omofun' : 'vtt6');
+                var key = siteKeyOf(s);
                 var site = getSite(key);
                 if (!site) continue;
                 var url = fillTpl(site.search, {
@@ -951,8 +1054,12 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
     var d = res.data;
     try {
         key = key || '';
-        var site = getSite(key);
-        if (!site) site = /omo/i.test(key + (searchUrl || '')) ? SITES.omofun : SITES.vtt6;
+        var site = getSite(key) || resolveSiteByHost('', searchUrl || '');
+        if (!site) {
+            d.push({ title: '未知搜索站点: ' + key, col_type: 'text_center_1' });
+            setHomeResult(res);
+            return;
+        }
         var host = site.host;
         var pageUrl = cleanHttpUrl(searchUrl) || cleanHttpUrl(MY_URL) || (host + '/');
         var cookie = '';
