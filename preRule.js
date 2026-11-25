@@ -1,7 +1,7 @@
 ﻿var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/hksj/";
-var RULE_VER = "v22-anime34";
+var RULE_VER = "v22-anime35";
 var RULE_JS_MAX = 70000;
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
@@ -51,7 +51,7 @@ function isCurrentVer(js) {
     animeNum(v) >= animeNum(RULE_VER) &&
     js.indexOf("lazyRule") != -1 &&
     js.length < RULE_JS_MAX &&
-    !(new RegExp("wwgz" + ".cn")).test(js)
+    !(new RegExp("wwgz"+".cn")).test(js)
   );
 }
 
@@ -68,7 +68,7 @@ function uprulefile(force) {
   for (var i = 0; i < RULE_BASES.length; i++) {
     var rulejs = fetchRule(RULE_BASES[i] + RULE_JS_NAME, function (c) {
       var n = animeNum(parseRuleVer(c));
-      return n >= minNeed && c.indexOf("lazyRule") != -1 && c.length < RULE_JS_MAX && !(new RegExp("wwgz" + ".cn")).test(c);
+      return n >= minNeed && c.indexOf("lazyRule") != -1 && c.length < RULE_JS_MAX && !(new RegExp("wwgz"+".cn")).test(c);
     });
     var rulejson = fetchRule(RULE_BASES[i] + RULE_JSON_NAME, function (c) {
       return c.search(/\"vodhref\"/) != -1 && c.indexOf("omofun") != -1;
@@ -119,7 +119,7 @@ function buildUpdateItem() {
             rn >= minNeed &&
             rulejs.indexOf("pageNum") >= 0 &&
             rulejs.length < RULE_JS_MAX &&
-            !(new RegExp("wwgz" + ".cn")).test(rulejs);
+            !(new RegExp("wwgz"+".cn")).test(rulejs);
           var jnOk = rulejson.indexOf("vodhref") >= 0;
           logs.push(i + 1 + ":" + (rulejs ? rulejs.length : 0) + "/" + (remoteVer || "-") + (jsOk ? "+js" : "") + (jnOk ? "+json" : ""));
           if (!jsOk || !jnOk) continue;
