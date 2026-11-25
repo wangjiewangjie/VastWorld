@@ -35,7 +35,7 @@ function stripBom(js) {
 }
 
 function parseRuleVer(js) {
-  var m = (js || "").match(/var\s+RULE_VER\s*=\s*['"](v22-anime\d+)['"]/);
+  var m = (js || "").match(/RULE_VER\s*=\s*['"](v22-anime\d+)['"]/);
   return m ? m[1] : "";
 }
 
