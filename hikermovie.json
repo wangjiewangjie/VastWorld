@@ -54,16 +54,16 @@
         {
           "title": "555电影",
           "key": "dy555",
-          "vodtype": "电影&连续剧&综艺&动漫&短剧",
-          "vodhref": "1&2&3&4&126",
+          "vodtype": "电影&连续剧&综艺&动漫&短剧&福利",
+          "vodhref": "1&2&3&4&126&124",
           "ico": "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3",
           "url": "https://dy555.org"
         },
         {
           "title": "爱美剧",
           "key": "amj85",
-          "vodtype": "电影&连续剧&综艺&动漫&短剧",
-          "vodhref": "1&2&3&4&126",
+          "vodtype": "电影&连续剧&综艺&动漫&短剧&福利",
+          "vodhref": "1&2&3&4&126&124",
           "ico": "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3",
           "url": "https://amj85.com"
         }

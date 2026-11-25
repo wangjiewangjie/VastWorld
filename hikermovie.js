@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime29'; // v22-anime28 v22-anime27 v22-anime26 v22-anime25 v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2
+var RULE_VER = 'v22-anime30'; // v22-anime29 v22-anime28 v22-anime27 v22-anime26 v22-anime25 v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2
 var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
@@ -93,7 +93,9 @@ var SITES = {
         host: 'https://dy555.org',
         cate: '{host}/vodtype/{id}-fypage.html[firstPage={host}/vodtype/{id}.html]',
         search: '{host}/vodsearch/{wd}----------fypage---.html',
-        list: 'body&&.module-poster-item||body&&.module-item',
+        // 首页易卡住，进站直接走分类
+        skipHome: true,
+        list: 'body&&.module-poster-item',
         img: 'img&&data-original||.lazyload&&data-original||img&&data-src||img&&src',
         title: 'a&&title||.module-poster-item-title&&Text||strong&&Text||img&&alt',
         desc: '.module-item-note&&Text||.module-item-text&&Text||span&&Text',
@@ -107,7 +109,9 @@ var SITES = {
         host: 'https://amj85.com',
         cate: '{host}/vodtype/{id}-fypage.html[firstPage={host}/vodtype/{id}.html]',
         search: '{host}/vodsearch/{wd}----------fypage---.html',
-        list: 'body&&.film-card||body&&.module-poster-item',
+        // 首页常回 zstd 乱码，进站直接走分类
+        skipHome: true,
+        list: 'body&&.film-card',
         img: 'img&&src||img&&data-src||img&&data-original',
         title: 'h3&&a&&Text||a&&title||img&&alt||a&&Text',
         desc: '.film-state&&Text||p&&Text||span&&Text',
@@ -252,20 +256,40 @@ function loadJsonSites() {
     return out;
 }
 
+function isProbablyHtml(html) {
+    if (!html || html.length < 80) return false;
+    if (html.substring(0, 5) == 'error') return false;
+    var c0 = html.charCodeAt(0), c1 = html.charCodeAt(1);
+    // gzip / zstd 魔数：海阔未解压时当失败
+    if (c0 == 0x1f && c1 == 0x8b) return false;
+    if (c0 == 0x28 && c1 == 0xb5) return false;
+    var head = html.substring(0, 800);
+    return /<!doctype|<html|<body|<head|class="/i.test(head);
+}
+
 function fetchPage(url, host, cookie) {
-    var headers = { 'User-Agent': MOBILE_UA, 'Referer': (host || url) + '/' };
+    var headers = {
+        'User-Agent': MOBILE_UA,
+        'Referer': (host || url) + '/',
+        'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate',
+        'Accept-Language': 'zh-CN,zh;q=0.9'
+    };
     try {
-        var html0 = fetch(url, { headers: headers, timeout: 12000 }) || '';
-        if (html0 && html0.substring(0, 5) != 'error' && !isOmofunGate(html0)) return html0;
+        var html0 = fetch(url, { headers: headers, timeout: 8000 }) || '';
+        if (isProbablyHtml(html0) && !isOmofunGate(html0)) return html0;
     } catch (e0) {}
     if (cookie) {
         headers.Cookie = cookie;
         try {
-            var html = fetch(url, { headers: headers, timeout: 12000 }) || '';
-            if (html && html.substring(0, 5) != 'error') return html;
+            var html = fetch(url, { headers: headers, timeout: 8000 }) || '';
+            if (isProbablyHtml(html)) return html;
         } catch (e) {}
     }
-    try { return request(url) || ''; } catch (e2) { return ''; }
+    try {
+        var html2 = request(url) || '';
+        return isProbablyHtml(html2) ? html2 : '';
+    } catch (e2) { return ''; }
 }
 
 function cleanHttpUrl(u) {
@@ -320,6 +344,7 @@ function parseList(html, site, host) {
             desc: desc,
             url: full
         });
+        if (out.length >= 60) break;
     }
     return out;
 }
@@ -671,13 +696,14 @@ function hikhmerj() {
         if (pn == 1) {
             for (var i = 0; i < types.length; i++) {
                 if (!types[i] || !ids[i]) continue;
-                var cate = fillTpl(site.cate, { host: host, id: ids[i] });
+                // 不用远程 URL 做 .rule 入口，避免站点慢/压缩导致一直 loading
+                var cateFirst = cateUrl(site, host, ids[i], 1);
                 d.push({
                     title: types[i],
-                    url: $(cate).rule((k) => {
+                    url: $('hiker://empty#noRecordHistory#').rule((k, page) => {
                         eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
-                        clsrule(k);
-                    }, key),
+                        clsrule(k, page);
+                    }, key, cateFirst),
                     col_type: 'scroll_button'
                 });
             }
@@ -686,14 +712,20 @@ function hikhmerj() {
 
         var html = '';
         var list = [];
-        if (pn == 1) {
+        // 部分站首页 zstd/慢速，跳过首页直接拉分类
+        if (pn == 1 && !site.skipHome) {
             html = fetchPage(host + '/', host);
             list = parseList(html, site, host);
         }
-        // 首页拉空 / 翻页：用第一个分类兜底
+        // 首页拉空 / 翻页 / skipHome：用分类页
         if (!list.length && ids[0]) {
             var fallback = cateUrl(site, host, ids[0], pn);
             html = fetchPage(fallback, host);
+            list = parseList(html, site, host);
+        }
+        // 再兜底：换第二个分类试一次
+        if (!list.length && ids[1] && pn == 1) {
+            html = fetchPage(cateUrl(site, host, ids[1], 1), host);
             list = parseList(html, site, host);
         }
         if (!list.length) {
@@ -711,7 +743,7 @@ function hikhmerj() {
     setHomeResult(res);
 }
 
-function clsrule(key) {
+function clsrule(key, pageUrl) {
     var res = { data: [] };
     var d = res.data;
     try {
@@ -723,9 +755,17 @@ function clsrule(key) {
             return;
         }
         var host = site.host;
+        var target = cleanHttpUrl(pageUrl) || cleanHttpUrl(MY_URL) || '';
         var html = '';
-        try { html = getResCode() || ''; } catch (e) {}
-        if (!html) html = fetchPage(MY_URL, host);
+        // 仅当父页已是真实站点 HTML 时才用 getResCode，避免 empty 入口脏数据
+        if (!target || !/^https?:/i.test(target)) {
+            try {
+                var gr = getResCode() || '';
+                if (isProbablyHtml(gr)) html = gr;
+            } catch (e) {}
+        }
+        if (!html && target) html = fetchPage(target, host);
+        if (!html && /^https?:/i.test(MY_URL || '')) html = fetchPage(MY_URL, host);
         try { refreshX5WebView(''); } catch (e) {}
         var list = parseList(html, site, host);
         if (!list.length) {
