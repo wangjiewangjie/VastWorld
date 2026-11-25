@@ -1,10 +1,10 @@
-var RULE_JS_NAME = "hikermovie.js";
+ï»¿var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/hksj/";
-var RULE_VER = "v22-anime38";
+var RULE_VER = "v22-anime39";
 var RULE_JS_MAX = 70000;
 
-// ½ûÓÃ jsDelivr @main£¬±ÜÃâ CDN »º´æ¾É¹æÔò
+// Â½Ã»Ã“Ãƒ jsDelivr @mainÂ£Â¬Â±ÃœÃƒÃ¢ CDN Â»ÂºÂ´Ã¦Â¾Ã‰Â¹Ã¦Ã”Ã²
 var RULE_BASES = [
   "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/",
   "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/",
@@ -92,7 +92,7 @@ function uprulefile(force) {
 
 function buildUpdateItem() {
   return {
-    title: "¸üĞÂ¹æÔò",
+    title: "Â¸Ã¼ÃÃ‚Â¹Ã¦Ã”Ã²",
     url: $("#noLoading#").lazyRule(() => {
       var bases = RULE_BASES.slice(0);
       var dir = RULE_DIR;
@@ -128,13 +128,13 @@ function buildUpdateItem() {
           logs.push(i + 1 + ":err");
         }
       }
-      if (!best) return "toast://¸üĞÂÊ§°Ü want¡İ" + minNeed + " ¡¤ " + logs.join(" | ");
+      if (!best) return "toast://Â¸Ã¼ÃÃ‚ÃŠÂ§Â°Ãœ wantÂ¡Ã" + minNeed + " Â¡Â¤ " + logs.join(" | ");
       writeFile(dir + "hikermovie.js", stripBom(best.js));
       writeFile(dir + "hikermovie.json", best.jn);
       var check = parseRuleVer(fetch(dir + "hikermovie.js") || "");
-      if (animeNum(check) < best.num) return "toast://Ğ´ÈëĞ£ÑéÊ§°Ü";
+      if (animeNum(check) < best.num) return "toast://ÃÂ´ÃˆÃ«ÃÂ£Ã‘Ã©ÃŠÂ§Â°Ãœ";
       refreshPage(false);
-      return "toast://ÒÑ¸üĞÂ " + best.ver + " (" + best.js.length + "B)";
+      return "toast://Ã’Ã‘Â¸Ã¼ÃÃ‚ " + best.ver + " (" + best.js.length + "B)";
     }),
     col_type: "flex_button",
   };
@@ -168,7 +168,7 @@ function attachUpdateButton() {
         if (res && res.data) {
           var has = false;
           for (var i = 0; i < res.data.length; i++) {
-            if (res.data[i].title == "¸üĞÂ¹æÔò") {
+            if (res.data[i].title == "Â¸Ã¼ÃÃ‚Â¹Ã¦Ã”Ã²") {
               has = true;
               break;
             }
@@ -191,7 +191,7 @@ function installUpdateStub() {
     setHomeResult({
       data: [
         {
-          title: "±¾µØ¹æÔòÎ´¾ÍĞ÷£¬µã´Ë¸üĞÂµ½ " + RULE_VER,
+          title: "Â±Â¾ÂµÃ˜Â¹Ã¦Ã”Ã²ÃÂ´Â¾ÃÃÃ·Â£Â¬ÂµÃ£Â´Ã‹Â¸Ã¼ÃÃ‚ÂµÂ½ " + RULE_VER,
           url: buildUpdateItem().url,
           col_type: "text_center_1",
         },

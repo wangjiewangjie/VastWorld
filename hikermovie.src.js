@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime38';
+var RULE_VER = 'v22-anime39';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
 var RULE_JS_MAX = 70000;
@@ -484,22 +484,222 @@ function syncWelfareCookie(site, pageUrl) {
     return cok || readWelfareCookie(site);
 }
 
+function welfareParseGate(html) {
+    html = html || '';
+    var csrf = '';
+    var nextPath = '/vodtype/124.html';
+    try {
+        var m1 = html.match(/name=["']csrf["'][^>]*value=["']([^"']+)["']/i) ||
+            html.match(/value=["']([^"']+)["'][^>]*name=["']csrf["']/i);
+        if (m1) csrf = m1[1];
+        var m2 = html.match(/name=["']next["'][^>]*value=["']([^"']+)["']/i) ||
+            html.match(/value=["']([^"']+)["'][^>]*name=["']next["']/i);
+        if (m2) nextPath = m2[1] || nextPath;
+    } catch (e) {}
+    return { csrf: csrf, next: nextPath };
+}
+
+function welfareFetchGate(host, pageUrl, cok) {
+    var url = cleanHttpUrl(pageUrl) || (host + '/vodtype/124.html');
+    var headers = { 'User-Agent': MOBILE_UA, 'Accept': 'text/html,application/xhtml+xml', 'Referer': host + '/' };
+    if (cok) headers.Cookie = cok;
+    try {
+        return javaHttp('GET', url, headers, null);
+    } catch (e) {
+        return { body: '', cookie: '', code: -1 };
+    }
+}
+
+function welfareSaveCaptcha(host, cok) {
+    var imgUrl = host + '/welfare/image.html?t=' + Date.now();
+    var headers = { 'User-Agent': MOBILE_UA, 'Referer': host + '/', 'Accept': 'image/*,*/*' };
+    if (cok) headers.Cookie = cok;
+    try {
+        var conn = new java.net.URL(imgUrl).openConnection();
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(10000);
+        conn.setRequestMethod('GET');
+        for (var k in headers) conn.setRequestProperty(k, String(headers[k]));
+        var stream = conn.getInputStream();
+        var baos = new java.io.ByteArrayOutputStream();
+        var buf = java.lang.reflect.Array.newInstance(java.lang.Byte.TYPE, 4096);
+        var n;
+        while ((n = stream.read(buf)) != -1) baos.write(buf, 0, n);
+        stream.close();
+        var bytes = baos.toByteArray();
+        var dir = new java.io.File('/storage/emulated/0/Android/data/com.example.hikerview/files/Documents/Hiker/cache');
+        try { if (!dir.exists()) dir.mkdirs(); } catch (e0) {}
+        var file = new java.io.File(dir, 'amj_welfare.jpg');
+        try {
+            var fos = new java.io.FileOutputStream(file);
+            fos.write(bytes);
+            fos.close();
+            return 'file://' + file.getAbsolutePath();
+        } catch (e1) {
+            // 兜底：系统临时目录
+            file = java.io.File.createTempFile('amj_welfare', '.jpg');
+            var fos2 = new java.io.FileOutputStream(file);
+            fos2.write(bytes);
+            fos2.close();
+            return 'file://' + file.getAbsolutePath();
+        }
+    } catch (e) {
+        return imgUrl;
+    }
+}
+
+function welfareCheckPost(host, csrf, nextPath, answer, cok, referer) {
+    host = (host || '').replace(/\/$/, '');
+    var checkUrl = host + '/welfare/check.html';
+    var enc = function (s) {
+        try { return String(java.net.URLEncoder.encode(String(s), 'UTF-8')); } catch (e) {
+            return encodeURIComponent(String(s));
+        }
+    };
+    var body = 'csrf=' + enc(csrf) + '&next=' + enc(nextPath || '/vodtype/124.html') + '&answer=' + enc(answer);
+    try {
+        var conn = new java.net.URL(checkUrl).openConnection();
+        conn.setInstanceFollowRedirects(false);
+        conn.setConnectTimeout(12000);
+        conn.setReadTimeout(12000);
+        conn.setRequestMethod('POST');
+        conn.setDoOutput(true);
+        conn.setRequestProperty('User-Agent', MOBILE_UA);
+        conn.setRequestProperty('Referer', referer || (host + '/vodtype/124.html'));
+        conn.setRequestProperty('Origin', host);
+        conn.setRequestProperty('Content-Type', 'application/x-www-form-urlencoded');
+        if (cok) conn.setRequestProperty('Cookie', cok);
+        var bytes = new java.lang.String(body).getBytes('UTF-8');
+        conn.setRequestProperty('Content-Length', String(bytes.length));
+        var os = conn.getOutputStream();
+        os.write(bytes);
+        os.flush();
+        os.close();
+        var code = 0;
+        try { code = conn.getResponseCode(); } catch (eC) { code = -1; }
+        var newCok = cok || '';
+        try {
+            var fields = conn.getHeaderFields();
+            if (fields) {
+                var keys = fields.keySet().toArray();
+                for (var i = 0; i < keys.length; i++) {
+                    var key = keys[i] == null ? '' : String(keys[i]);
+                    if (!/^set-cookie$/i.test(key)) continue;
+                    var vals = fields.get(keys[i]);
+                    if (!vals) continue;
+                    for (var j = 0; j < vals.size(); j++) newCok = mergeCookie(newCok, String(vals.get(j)).split(';')[0]);
+                }
+            }
+        } catch (eH) {}
+        var loc = '';
+        try { loc = conn.getHeaderField('Location') || ''; } catch (eL) {}
+        var text = '';
+        try {
+            var stream = null;
+            try { stream = code >= 400 ? conn.getErrorStream() : conn.getInputStream(); } catch (eS) {}
+            if (stream) {
+                var reader = new java.io.BufferedReader(new java.io.InputStreamReader(stream, 'UTF-8'));
+                var sb = new java.lang.StringBuilder();
+                var line;
+                while ((line = reader.readLine()) != null) sb.append(line).append('\n');
+                reader.close();
+                text = String(sb.toString());
+            }
+        } catch (eB) {}
+        try { conn.disconnect(); } catch (eD) {}
+
+        if (code >= 300 && code < 400 && loc) {
+            if (!/^https?:/i.test(loc)) loc = host + (loc.charAt(0) == '/' ? loc : '/' + loc);
+            var gr = javaHttp('GET', loc, {
+                'User-Agent': MOBILE_UA,
+                'Cookie': newCok,
+                'Referer': checkUrl
+            }, null);
+            newCok = mergeCookie(newCok, gr.cookie);
+            if (isWelfareGate(gr.body)) return { ok: false, msg: '验证码错误', cookie: newCok };
+            return { ok: true, cookie: newCok, html: gr.body || '' };
+        }
+        if (isWelfareGate(text)) return { ok: false, msg: '验证码错误或已过期', cookie: newCok };
+        if (code >= 200 && code < 400 && !isWelfareGate(text)) return { ok: true, cookie: newCok, html: text };
+        return { ok: false, msg: '提交失败(' + code + ')', cookie: newCok };
+    } catch (e) {
+        return { ok: false, msg: '提交异常', cookie: cok || '' };
+    }
+}
+
 function pushWelfareManual(d, key, site, pageUrl) {
-    var link = cleanHttpUrl(pageUrl) || ((site && (site.flHost || site.host)) || '') + '/';
-    d.push({ title: '福利区需验证码，点①在网页完成验证', url: link, col_type: 'text_center_1' });
+    // 规则内验证：禁止打开原站 POST（海阔 WebView 会「页面错误稍后重试」）
+    var host = ((site && (site.flHost || site.host)) || '').replace(/\/$/, '');
+    var link = cleanHttpUrl(pageUrl) || (host + '/vodtype/124.html');
+    var cok = readWelfareCookie(site) || '';
+    var gate = welfareFetchGate(host, link, cok);
+    cok = mergeCookie(cok, gate.cookie || '');
+    if (cok) writeWelfareCookie(site, cok);
+    var html = gate.body || '';
+    var parsed = welfareParseGate(html);
+    var img = welfareSaveCaptcha(host, cok);
+    try {
+        putMyVar('amj_w_host', host);
+        putMyVar('amj_w_csrf', parsed.csrf || '');
+        putMyVar('amj_w_next', parsed.next || '/vodtype/124.html');
+        putMyVar('amj_w_page', link);
+        putMyVar('amj_w_key', key || 'amj85');
+        putMyVar('amj_w_cok', cok || '');
+    } catch (eV) {}
+
     d.push({
-        title: '② 我已验证，重新加载分类',
-        // 用 lazyRule + refreshPage，避免嵌套 .rule/setHomeResult 触发「页面错误稍后重试」
-        url: $('hiker://empty#noLoading#').lazyRule((k, page) => {
+        title: '福利区验证 · 看图输入4位数字（勿打开原网页）',
+        url: 'hiker://empty',
+        col_type: 'text_center_1'
+    });
+    d.push({
+        title: '验证码（点此刷新）',
+        pic_url: img,
+        url: $('hiker://empty#noLoading#').lazyRule(() => {
             eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
-            var site2 = getSite(k) || SITES.amj85;
-            var cok = syncWelfareCookie(site2, page);
-            var html = fetchPage(page, site2.flHost || site2.host, cok);
-            if (isWelfareGate(html)) return 'toast://仍未通过，请先完成①再点②';
-            if (!isProbablyHtml(html) || html.length < 800) return 'toast://加载失败，请重试验证';
             refreshPage(false);
-            return 'hiker://empty';
-        }, key || 'amj85', link),
+            return 'toast://已刷新验证码';
+        }),
+        col_type: 'pic_1_center'
+    });
+    if (!parsed.csrf) {
+        d.push({ title: '未拿到验证页，点此重试', url: $('hiker://empty#noLoading#').lazyRule(() => {
+            refreshPage(false);
+            return 'toast://重试中';
+        }), col_type: 'text_center_1' });
+        return;
+    }
+    d.push({
+        title: '输入验证码并提交',
+        url: $('hiker://empty#noLoading#').lazyRule((host, csrf, nextPath, page, k) => {
+            eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
+            return 'input://请输入图片中的4位数字￥￥' + $.toString((host, csrf, nextPath, page, k) => {
+                eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
+                var ans = String(input || '').replace(/\s+/g, '');
+                if (!/^[1-9]{4}$/.test(ans)) return 'toast://请输入4位数字（1-9）';
+                var site2 = getSite(k) || SITES.amj85;
+                var cok2 = '';
+                try { cok2 = getMyVar('amj_w_cok', '') || readWelfareCookie(site2); } catch (e0) {
+                    cok2 = readWelfareCookie(site2);
+                }
+                // csrf 可能已刷新，优先 myVar
+                try {
+                    var c2 = getMyVar('amj_w_csrf', '');
+                    if (c2) csrf = c2;
+                    var h2 = getMyVar('amj_w_host', '');
+                    if (h2) host = h2;
+                } catch (e1) {}
+                var r = welfareCheckPost(host, csrf, nextPath, ans, cok2, page);
+                if (r.cookie) writeWelfareCookie(site2, r.cookie);
+                try { putMyVar('amj_w_cok', r.cookie || cok2 || ''); } catch (e2) {}
+                if (!r.ok) {
+                    refreshPage(false);
+                    return 'toast://' + (r.msg || '验证失败，请看新图重试');
+                }
+                refreshPage(false);
+                return 'toast://验证成功';
+            }, host, csrf, nextPath, page, k);
+        }, host, parsed.csrf, parsed.next, link, key || 'amj85'),
         col_type: 'text_center_1'
     });
 }
@@ -924,8 +1124,16 @@ function clsrule(key, pageUrl) {
             } catch (e) {}
         }
         var wCok = '';
-        if (site.flHost && /\/(vodtype|vodshow)\/124\b/.test(target || '')) {
-            wCok = syncWelfareCookie(site, target) || readWelfareCookie(site);
+        var isFl = !!(site.flHost && /\/(vodtype|vodshow)\/124\b/.test(target || ''));
+        if (isFl) {
+            wCok = readWelfareCookie(site) || syncWelfareCookie(site, target) || '';
+            // 福利区用 javaHttp 带 cookie，避免 fetch 丢会话后又进验证页
+            if (!html && target) {
+                var wg = welfareFetchGate(host, target, wCok);
+                html = wg.body || '';
+                wCok = mergeCookie(wCok, wg.cookie || '');
+                if (wCok) writeWelfareCookie(site, wCok);
+            }
         }
         if (!html && target) {
             html = wCok ? (fetchPage(target, host, wCok) || '') : fetchSiteHtml(site, target);
@@ -933,7 +1141,7 @@ function clsrule(key, pageUrl) {
         if (!html && /^https?:/i.test(MY_URL || '')) html = fetchSiteHtml(site, MY_URL);
         try { refreshX5WebView(''); } catch (e) {}
         if (isWelfareGate(html)) {
-            pushWelfareManual(d, key, site, target || host + '/');
+            pushWelfareManual(d, key, site, target || host + '/vodtype/124.html');
             setHomeResult(res);
             return;
         }
