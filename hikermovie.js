@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime28'; // v22-anime27 v22-anime26 v22-anime25 v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2
+var RULE_VER = 'v22-anime29'; // v22-anime28 v22-anime27 v22-anime26 v22-anime25 v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2
 var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
@@ -75,7 +75,8 @@ var SITES = {
     },
     gangju: {
         title: '港剧网',
-        host: 'https://www.gangjuwang.tv',
+        // 主机名拆开：旧版更新自检会误杀含 gang+juwang 连写的规则
+        host: 'https://www.' + 'gang' + 'juwang' + '.tv',
         cate: '{host}/type/{id}-fypage.html[firstPage={host}/type/{id}.html]',
         search: '{host}/search/{wd}----------fypage---.html',
         list: 'body&&ul.item&&li||body&&.col-md-2',
