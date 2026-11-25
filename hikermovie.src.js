@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
+// RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
+var RULE_VER = 'v22-anime42';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
-// 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime41';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
 var RULE_JS_MAX = 70000;
