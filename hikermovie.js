@@ -1,7 +1,9 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime32'; // v22-anime31 v22-anime30 v22-anime29 v22-anime28 v22-anime27 v22-anime26 v22-anime25 v22-anime24 v22-anime23 v22-anime22 v22-anime21 v22-anime20 v22-anime19 v22-anime18 v22-anime17 v22-anime16 v22-anime15 v22-anime14 v22-anime13 v22-anime12 v22-anime11 v22-anime10 v22-anime9 v22-anime8 v22-anime7 v22-anime6 v22-anime5 v22-anime4 v22-anime3 v22-anime2
+var RULE_VER = 'v22-anime33';
+// 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
+var RULE_COMPAT = 'v22-anime27';
 var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
@@ -662,34 +664,51 @@ function omofunFetchPassed(host, pageUrl, cookie) {
 }
 
 // ---------- 更新 ----------
+function parseRuleVer(js) {
+    var m = (js || '').match(/var\s+RULE_VER\s*=\s*['"](v22-anime\d+)['"]/);
+    return m ? m[1] : '';
+}
+
+function animeNum(ver) {
+    var m = (ver || '').match(/anime(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+}
+
 function tryUpdateFrom(bases, ver) {
     var dir = 'hiker://files/rules/hksj/';
-    var opt = { headers: { 'User-Agent': MOBILE_UA, 'Cache-Control': 'no-cache', Pragma: 'no-cache' }, timeout: 6000 };
+    var opt = { headers: { 'User-Agent': MOBILE_UA, 'Cache-Control': 'no-cache', Pragma: 'no-cache' }, timeout: 8000 };
     var logs = [];
+    var want = animeNum(ver);
+    var localNum = 0;
+    try { localNum = animeNum(parseRuleVer(fetch(dir + 'hikermovie.js') || '')); } catch (e0) {}
+    var minNeed = Math.max(want, localNum, 28);
+    var best = null;
+    var bad = ('wwgz' + '.cn');
     for (var i = 0; i < bases.length; i++) {
         try {
             var js = fetch(bases[i] + 'hikermovie.js?t=' + Date.now(), opt) || '';
             var jn = fetch(bases[i] + 'hikermovie.json?t=' + Date.now(), opt) || '';
             if (js.substring(0, 5) == 'error') js = '';
             if (jn.substring(0, 5) == 'error') jn = '';
-            // 黑名单域名拆开写，避免字面量出现在本文件里导致自检失败
-            var bad = ('wwgz' + '.cn');
-            var jsOk = js && js.indexOf(ver) >= 0 && js.indexOf('pageNum') >= 0 && js.length < RULE_JS_MAX && !new RegExp(bad).test(js);
+            var remoteVer = parseRuleVer(js);
+            var rn = animeNum(remoteVer);
+            var jsOk = js && remoteVer && rn >= minNeed && js.indexOf('pageNum') >= 0 && js.length < RULE_JS_MAX && !new RegExp(bad).test(js);
             var jnOk = jn && jn.indexOf('vodhref') >= 0;
             var tag = bases[i].indexOf('192.168.') >= 0 ? 'lan' : (bases[i].indexOf('gitee') >= 0 ? 'gitee' : (bases[i].indexOf('ghfast') >= 0 ? 'ghfast' : 'gh'));
-            logs.push(tag + ':' + (js ? js.length : 0) + (jsOk ? '+js' : '') + (jnOk ? '+json' : ''));
+            logs.push(tag + ':' + (js ? js.length : 0) + '/' + (remoteVer || '-') + (jsOk ? '+js' : '') + (jnOk ? '+json' : ''));
             if (!jsOk || !jnOk) continue;
-            writeFile(dir + 'hikermovie.js', js);
-            writeFile(dir + 'hikermovie.json', jn);
-            var check = fetch(dir + 'hikermovie.js') || '';
-            if (check.indexOf(ver) < 0) return 'toast://写入校验失败';
-            refreshPage(false);
-            return 'toast://已更新 ' + ver + ' ←' + tag + ' (' + js.length + 'B)';
+            if (!best || rn > best.num) best = { js: js, jn: jn, ver: remoteVer, num: rn, tag: tag };
         } catch (e) {
             logs.push('err');
         }
     }
-    return 'toast://更新失败 ' + ver + ' · ' + logs.join(' | ');
+    if (!best) return 'toast://更新失败 want≥' + minNeed + ' · ' + logs.join(' | ');
+    writeFile(dir + 'hikermovie.js', best.js);
+    writeFile(dir + 'hikermovie.json', best.jn);
+    var check = parseRuleVer(fetch(dir + 'hikermovie.js') || '');
+    if (animeNum(check) < best.num) return 'toast://写入校验失败';
+    refreshPage(false);
+    return 'toast://已更新 ' + best.ver + ' ←' + best.tag + ' (' + best.js.length + 'B)';
 }
 
 // ---------- 首页 ----------

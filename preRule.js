@@ -1,7 +1,7 @@
 ﻿var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/hksj/";
-var RULE_VER = "v22-anime32";
+var RULE_VER = "v22-anime33";
 var RULE_JS_MAX = 70000;
 
 // 禁用 jsDelivr @main，避免 CDN 缓存旧规则
@@ -34,10 +34,21 @@ function stripBom(js) {
   return js ? (js + "").replace(/^\uFEFF+/, "").replace(/\uFEFF/g, "") : js;
 }
 
+function parseRuleVer(js) {
+  var m = (js || "").match(/var\s+RULE_VER\s*=\s*['"](v22-anime\d+)['"]/);
+  return m ? m[1] : "";
+}
+
+function animeNum(ver) {
+  var m = (ver || "").match(/anime(\d+)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
 function isCurrentVer(js) {
+  var v = parseRuleVer(js);
   return (
-    js &&
-    js.indexOf(RULE_VER) != -1 &&
+    !!v &&
+    animeNum(v) >= animeNum(RULE_VER) &&
     js.indexOf("lazyRule") != -1 &&
     js.length < RULE_JS_MAX &&
     !(new RegExp("wwgz" + ".cn")).test(js)
@@ -50,18 +61,31 @@ function uprulefile(force) {
     localJs = fetch(RULE_DIR + RULE_JS_NAME) || "";
   } catch (e) {}
   if (!force && isCurrentVer(localJs)) return false;
+  var minNeed = Math.max(animeNum(RULE_VER), animeNum(parseRuleVer(localJs)), 28);
+  var bestJs = "";
+  var bestJson = "";
+  var bestNum = 0;
   for (var i = 0; i < RULE_BASES.length; i++) {
     var rulejs = fetchRule(RULE_BASES[i] + RULE_JS_NAME, function (c) {
-      return isCurrentVer(c);
+      var n = animeNum(parseRuleVer(c));
+      return n >= minNeed && c.indexOf("lazyRule") != -1 && c.length < RULE_JS_MAX && !(new RegExp("wwgz" + ".cn")).test(c);
     });
     var rulejson = fetchRule(RULE_BASES[i] + RULE_JSON_NAME, function (c) {
       return c.search(/\"vodhref\"/) != -1 && c.indexOf("omofun") != -1;
     });
     if (rulejs && rulejson) {
-      writeFile(RULE_DIR + RULE_JS_NAME, stripBom(rulejs));
-      writeFile(RULE_DIR + RULE_JSON_NAME, rulejson);
-      return true;
+      var n = animeNum(parseRuleVer(rulejs));
+      if (n > bestNum) {
+        bestNum = n;
+        bestJs = rulejs;
+        bestJson = rulejson;
+      }
     }
+  }
+  if (bestJs && bestJson) {
+    writeFile(RULE_DIR + RULE_JS_NAME, stripBom(bestJs));
+    writeFile(RULE_DIR + RULE_JSON_NAME, bestJson);
+    return true;
   }
   return false;
 }
@@ -78,30 +102,39 @@ function buildUpdateItem() {
         timeout: 8000,
       };
       var logs = [];
+      var localNum = 0;
+      try {
+        localNum = animeNum(parseRuleVer(fetch(dir + "hikermovie.js") || ""));
+      } catch (e0) {}
+      var minNeed = Math.max(animeNum(ver), localNum, 28);
+      var best = null;
       for (var i = 0; i < bases.length; i++) {
         try {
           var rulejs = fetch(bases[i] + "hikermovie.js?t=" + Date.now(), opt) || "";
           var rulejson = fetch(bases[i] + "hikermovie.json?t=" + Date.now(), opt) || "";
+          var remoteVer = parseRuleVer(rulejs);
+          var rn = animeNum(remoteVer);
           var jsOk =
-            rulejs.indexOf(ver) >= 0 &&
+            !!remoteVer &&
+            rn >= minNeed &&
             rulejs.indexOf("pageNum") >= 0 &&
             rulejs.length < RULE_JS_MAX &&
             !(new RegExp("wwgz" + ".cn")).test(rulejs);
           var jnOk = rulejson.indexOf("vodhref") >= 0;
-          logs.push(i + 1 + ":" + (rulejs ? rulejs.length : 0) + (jsOk ? "+js" : "") + (jnOk ? "+json" : ""));
+          logs.push(i + 1 + ":" + (rulejs ? rulejs.length : 0) + "/" + (remoteVer || "-") + (jsOk ? "+js" : "") + (jnOk ? "+json" : ""));
           if (!jsOk || !jnOk) continue;
-          rulejs = stripBom(rulejs);
-          writeFile(dir + "hikermovie.js", rulejs);
-          writeFile(dir + "hikermovie.json", rulejson);
-          var check = fetch(dir + "hikermovie.js") || "";
-          if (check.indexOf(ver) < 0) return "toast://写入校验失败";
-          refreshPage(false);
-          return "toast://已更新 " + ver + " (" + rulejs.length + "B)";
+          if (!best || rn > best.num) best = { js: rulejs, jn: rulejson, ver: remoteVer, num: rn };
         } catch (e) {
           logs.push(i + 1 + ":err");
         }
       }
-      return "toast://更新失败 " + ver + " · " + logs.join(" | ");
+      if (!best) return "toast://更新失败 want≥" + minNeed + " · " + logs.join(" | ");
+      writeFile(dir + "hikermovie.js", stripBom(best.js));
+      writeFile(dir + "hikermovie.json", best.jn);
+      var check = parseRuleVer(fetch(dir + "hikermovie.js") || "");
+      if (animeNum(check) < best.num) return "toast://写入校验失败";
+      refreshPage(false);
+      return "toast://已更新 " + best.ver + " (" + best.js.length + "B)";
     }),
     col_type: "flex_button",
   };
