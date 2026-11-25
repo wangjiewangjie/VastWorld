@@ -1,10 +1,10 @@
-ï»¿var RULE_JS_NAME = "hikermovie.js";
+var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/hksj/";
-var RULE_VER = "v22-anime37";
+var RULE_VER = "v22-anime38";
 var RULE_JS_MAX = 70000;
 
-// ç¦ç”¨ jsDelivr @mainï¼Œé¿å… CDN ç¼“å­˜æ—§è§„åˆ™
+// ½ûÓÃ jsDelivr @main£¬±ÜÃâ CDN »º´æ¾É¹æÔò
 var RULE_BASES = [
   "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/",
   "https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/",
@@ -92,7 +92,7 @@ function uprulefile(force) {
 
 function buildUpdateItem() {
   return {
-    title: "æ›´æ–°è§„åˆ™",
+    title: "¸üÐÂ¹æÔò",
     url: $("#noLoading#").lazyRule(() => {
       var bases = RULE_BASES.slice(0);
       var dir = RULE_DIR;
@@ -128,13 +128,13 @@ function buildUpdateItem() {
           logs.push(i + 1 + ":err");
         }
       }
-      if (!best) return "toast://æ›´æ–°å¤±è´¥ wantâ‰¥" + minNeed + " Â· " + logs.join(" | ");
+      if (!best) return "toast://¸üÐÂÊ§°Ü want¡Ý" + minNeed + " ¡¤ " + logs.join(" | ");
       writeFile(dir + "hikermovie.js", stripBom(best.js));
       writeFile(dir + "hikermovie.json", best.jn);
       var check = parseRuleVer(fetch(dir + "hikermovie.js") || "");
-      if (animeNum(check) < best.num) return "toast://å†™å…¥æ ¡éªŒå¤±è´¥";
+      if (animeNum(check) < best.num) return "toast://Ð´ÈëÐ£ÑéÊ§°Ü";
       refreshPage(false);
-      return "toast://å·²æ›´æ–° " + best.ver + " (" + best.js.length + "B)";
+      return "toast://ÒÑ¸üÐÂ " + best.ver + " (" + best.js.length + "B)";
     }),
     col_type: "flex_button",
   };
@@ -168,7 +168,7 @@ function attachUpdateButton() {
         if (res && res.data) {
           var has = false;
           for (var i = 0; i < res.data.length; i++) {
-            if (res.data[i].title == "æ›´æ–°è§„åˆ™") {
+            if (res.data[i].title == "¸üÐÂ¹æÔò") {
               has = true;
               break;
             }
@@ -191,7 +191,7 @@ function installUpdateStub() {
     setHomeResult({
       data: [
         {
-          title: "æœ¬åœ°è§„åˆ™æœªå°±ç»ªï¼Œç‚¹æ­¤æ›´æ–°åˆ° " + RULE_VER,
+          title: "±¾µØ¹æÔòÎ´¾ÍÐ÷£¬µã´Ë¸üÐÂµ½ " + RULE_VER,
           url: buildUpdateItem().url,
           col_type: "text_center_1",
         },
