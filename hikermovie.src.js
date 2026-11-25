@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime39';
+var RULE_VER = 'v22-anime40';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
 var RULE_JS_MAX = 70000;
@@ -923,7 +923,8 @@ function omofunFetchPassed(host, pageUrl, cookie) {
 
 // ---------- 更新 ----------
 function parseRuleVer(js) {
-    var m = (js || '').match(/var\s+RULE_VER\s*=\s*['"](v22-anime\d+)['"]/);
+    // 压缩后是 var RULE_JSON=...,RULE_VER="v22-animeN"，不能要求前面有 var
+    var m = (js || '').match(/RULE_VER\s*=\s*['"](v22-anime\d+)['"]/);
     return m ? m[1] : '';
 }
 
