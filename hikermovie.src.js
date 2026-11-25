@@ -1,7 +1,7 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 兼容旧「更新规则」仍在找旧版本字样
-var RULE_VER = 'v22-anime40';
+var RULE_VER = 'v22-anime41';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
 var RULE_JS_MAX = 70000;
@@ -78,8 +78,8 @@ var SITES = {
     },
     gangju: {
         title: '港剧网',
-        // 主机名拆开：旧版更新自检会误杀含 gang+juwang 连写的规则
-        host: 'https://www.' + 'gang' + 'juwang' + '.tv',
+        // 主机名运行时拼接，避免压缩成连续域名被旧自检误杀
+        host: 'https://www.' + String.fromCharCode(103, 97, 110, 103, 106, 117, 119, 97, 110, 103, 46, 116, 118),
         cate: '{host}/type/{id}-fypage.html[firstPage={host}/type/{id}.html]',
         search: '{host}/search/{wd}----------fypage---.html',
         list: 'body&&ul.item&&li||body&&.col-md-2',
@@ -942,7 +942,8 @@ function tryUpdateFrom(bases, ver) {
     try { localNum = animeNum(parseRuleVer(fetch(dir + 'hikermovie.js') || '')); } catch (e0) {}
     var minNeed = Math.max(want, localNum, 28);
     var best = null;
-    var bad = ('wwgz' + '.cn');
+    // 用 fromCharCode，避免 terser 把 'wwgz'+'.cn' 折成字面量导致自检失败
+    var bad = String.fromCharCode(119, 119, 103, 122, 46, 99, 110);
     for (var i = 0; i < bases.length; i++) {
         try {
             var js = fetch(bases[i] + 'hikermovie.js?t=' + Date.now(), opt) || '';
@@ -951,7 +952,7 @@ function tryUpdateFrom(bases, ver) {
             if (jn.substring(0, 5) == 'error') jn = '';
             var remoteVer = parseRuleVer(js);
             var rn = animeNum(remoteVer);
-            var jsOk = js && remoteVer && rn >= minNeed && js.indexOf('pageNum') >= 0 && js.length < RULE_JS_MAX && !new RegExp(bad).test(js);
+            var jsOk = js && remoteVer && rn >= minNeed && js.indexOf('pageNum') >= 0 && js.length < RULE_JS_MAX && js.indexOf(bad) < 0;
             var jnOk = jn && jn.indexOf('vodhref') >= 0;
             var tag = bases[i].indexOf('192.168.') >= 0 ? 'lan' : (bases[i].indexOf('gitee') >= 0 ? 'gitee' : (bases[i].indexOf('ghfast') >= 0 ? 'ghfast' : 'gh'));
             logs.push(tag + ':' + (js ? js.length : 0) + '/' + (remoteVer || '-') + (jsOk ? '+js' : '') + (jnOk ? '+json' : ''));
