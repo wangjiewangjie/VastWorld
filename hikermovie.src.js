@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime43';
+var RULE_VER = 'v22-anime44';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
@@ -469,7 +469,17 @@ function pushCards(d, list, host, col) {
 }
 
 function isWelfareGate(html) {
-    return !!html && /访问验证|welfare\/check|welfare\/image|完成验证后继续访问/i.test(html);
+    return !!html && /访问验证|完成验证后继续访问|welfare\/check|welfare\/image|welfare\/index|welfare-answer|name=["']csrf["']/i.test(html);
+}
+
+function welfareIndexUrl(host, nextPath) {
+    host = (host || '').replace(/\/$/, '');
+    nextPath = nextPath || '/vodtype/124.html';
+    try {
+        return host + '/welfare/index.html?next=' + String(java.net.URLEncoder.encode(String(nextPath), 'UTF-8'));
+    } catch (e) {
+        return host + '/welfare/index.html?next=' + encodeURIComponent(String(nextPath));
+    }
 }
 
 function welfareCkFile(site) {
@@ -517,19 +527,42 @@ function welfareParseGate(html) {
 }
 
 function welfareFetchGate(host, pageUrl, cok) {
+    host = (host || '').replace(/\/$/, '');
     var url = cleanHttpUrl(pageUrl) || (host + '/vodtype/124.html');
-    var headers = { 'User-Agent': MOBILE_UA, 'Accept': 'text/html,application/xhtml+xml', 'Referer': host + '/' };
+    var headers = {
+        'User-Agent': MOBILE_UA,
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Encoding': 'identity',
+        'Referer': host + '/welfare/index.html'
+    };
     if (cok) headers.Cookie = cok;
     try {
-        return javaHttp('GET', url, headers, null);
+        var r = javaHttp('GET', url, headers, null);
+        // 仍是压缩脏数据时，改走明文验证页
+        if ((!r.body || !isProbablyHtml(r.body) || (!isWelfareGate(r.body) && !/film-card|module-item/i.test(r.body))) && /\/(vodtype|vodshow)\/124\b/.test(url)) {
+            var gateUrl = welfareIndexUrl(host, '/vodtype/124.html');
+            var g2 = javaHttp('GET', gateUrl, headers, null);
+            if (g2.body && (isWelfareGate(g2.body) || isProbablyHtml(g2.body))) {
+                g2.cookie = mergeCookie(r.cookie || '', g2.cookie || '');
+                return g2;
+            }
+        }
+        return r;
     } catch (e) {
         return { body: '', cookie: '', code: -1 };
     }
 }
 
 function welfareSaveCaptcha(host, cok) {
+    host = (host || '').replace(/\/$/, '');
+    // 服务端返回 image/png，必须存成 .png，否则海阔常显示裂图
     var imgUrl = host + '/welfare/image.html?t=' + Date.now();
-    var headers = { 'User-Agent': MOBILE_UA, 'Referer': host + '/', 'Accept': 'image/*,*/*' };
+    var headers = {
+        'User-Agent': MOBILE_UA,
+        'Referer': host + '/welfare/index.html',
+        'Accept': 'image/png,image/*,*/*',
+        'Accept-Encoding': 'identity'
+    };
     if (cok) headers.Cookie = cok;
     try {
         var conn = new java.net.URL(imgUrl).openConnection();
@@ -544,17 +577,20 @@ function welfareSaveCaptcha(host, cok) {
         while ((n = stream.read(buf)) != -1) baos.write(buf, 0, n);
         stream.close();
         var bytes = baos.toByteArray();
+        try {
+            var scImg = conn.getHeaderFields();
+            // 验证码图可能续 session，调用方应合并 cookie；这里只落盘图片
+        } catch (eH) {}
         var dir = new java.io.File('/storage/emulated/0/Android/data/com.example.hikerview/files/Documents/Hiker/cache');
         try { if (!dir.exists()) dir.mkdirs(); } catch (e0) {}
-        var file = new java.io.File(dir, 'amj_welfare.jpg');
+        var file = new java.io.File(dir, 'amj_welfare.png');
         try {
             var fos = new java.io.FileOutputStream(file);
             fos.write(bytes);
             fos.close();
             return 'file://' + file.getAbsolutePath();
         } catch (e1) {
-            // 兜底：系统临时目录
-            file = java.io.File.createTempFile('amj_welfare', '.jpg');
+            file = java.io.File.createTempFile('amj_welfare', '.png');
             var fos2 = new java.io.FileOutputStream(file);
             fos2.write(bytes);
             fos2.close();
@@ -582,8 +618,9 @@ function welfareCheckPost(host, csrf, nextPath, answer, cok, referer) {
         conn.setRequestMethod('POST');
         conn.setDoOutput(true);
         conn.setRequestProperty('User-Agent', MOBILE_UA);
-        conn.setRequestProperty('Referer', referer || (host + '/vodtype/124.html'));
+        conn.setRequestProperty('Referer', referer || (host + '/welfare/index.html'));
         conn.setRequestProperty('Origin', host);
+        conn.setRequestProperty('Accept-Encoding', 'identity');
         conn.setRequestProperty('Content-Type', 'application/x-www-form-urlencoded');
         if (cok) conn.setRequestProperty('Cookie', cok);
         var bytes = new java.lang.String(body).getBytes('UTF-8');
@@ -648,12 +685,30 @@ function pushWelfareManual(d, key, site, pageUrl) {
     // 规则内验证：禁止打开原站 POST（海阔 WebView 会「页面错误稍后重试」）
     var host = ((site && (site.flHost || site.host)) || '').replace(/\/$/, '');
     var link = cleanHttpUrl(pageUrl) || (host + '/vodtype/124.html');
+    var nextPath = '/vodtype/124.html';
+    try {
+        var mNext = (link || '').match(/[?&]next=([^&]+)/);
+        if (mNext) {
+            try { nextPath = decodeURIComponent(mNext[1]); } catch (eN) { nextPath = mNext[1]; }
+        } else if (/\/(vodtype|vodshow)\/124\b/.test(link)) {
+            nextPath = '/vodtype/124.html';
+        }
+    } catch (e0) {}
     var cok = readWelfareCookie(site) || '';
-    var gate = welfareFetchGate(host, link, cok);
+    // 直连明文验证页，避免 /index.php/welfare 或 zstd 脏数据导致拿不到 csrf
+    var gateUrl = welfareIndexUrl(host, nextPath);
+    var gate = welfareFetchGate(host, gateUrl, cok);
     cok = mergeCookie(cok, gate.cookie || '');
     if (cok) writeWelfareCookie(site, cok);
     var html = gate.body || '';
+    if (!isWelfareGate(html)) {
+        gate = welfareFetchGate(host, link, cok);
+        cok = mergeCookie(cok, gate.cookie || '');
+        if (cok) writeWelfareCookie(site, cok);
+        html = gate.body || html;
+    }
     var parsed = welfareParseGate(html);
+    if (!parsed.next) parsed.next = nextPath;
     var img = welfareSaveCaptcha(host, cok);
     try {
         putMyVar('amj_w_host', host);
@@ -809,11 +864,16 @@ function javaHttp(method, url, headers, body) {
     conn.setConnectTimeout(12000);
     conn.setReadTimeout(12000);
     conn.setRequestMethod(method);
+    // 显式只要 identity：amj85 对 br/zstd 常回魔数脏数据；若仍回 gzip 则下方手动解
+    var hasAe = false;
     if (headers) {
-        for (var k in headers) {
-            if (headers[k] != null && headers[k] !== '') conn.setRequestProperty(k, String(headers[k]));
+        for (var hk in headers) {
+            if (headers[hk] == null || headers[hk] === '') continue;
+            if (/^accept-encoding$/i.test(hk)) hasAe = true;
+            conn.setRequestProperty(hk, String(headers[hk]));
         }
     }
+    if (!hasAe) conn.setRequestProperty('Accept-Encoding', 'identity');
     if (method == 'POST' && body != null) {
         conn.setDoOutput(true);
         var bytes = new java.lang.String(String(body)).getBytes('UTF-8');
@@ -827,14 +887,39 @@ function javaHttp(method, url, headers, body) {
     try { code = conn.getResponseCode(); } catch (eC) { code = -1; }
     var stream = null;
     try { stream = code >= 400 ? conn.getErrorStream() : conn.getInputStream(); } catch (eS) {}
+    var ce = '';
+    try { ce = String(conn.getContentEncoding() || conn.getHeaderField('Content-Encoding') || ''); } catch (eCe) {}
     var text = '';
     if (stream) {
-        var reader = new java.io.BufferedReader(new java.io.InputStreamReader(stream, 'UTF-8'));
-        var sb = new java.lang.StringBuilder();
-        var line;
-        while ((line = reader.readLine()) != null) sb.append(line).append('\n');
-        reader.close();
-        text = String(sb.toString());
+        try {
+            // 读成字节再判断 gzip/zstd，避免 identity 请求仍被强塞压缩
+            var baos = new java.io.ByteArrayOutputStream();
+            var buf = java.lang.reflect.Array.newInstance(java.lang.Byte.TYPE, 4096);
+            var n;
+            while ((n = stream.read(buf)) != -1) baos.write(buf, 0, n);
+            stream.close();
+            var raw = baos.toByteArray();
+            var b0 = raw.length > 0 ? (raw[0] & 0xff) : 0;
+            var b1 = raw.length > 1 ? (raw[1] & 0xff) : 0;
+            var b2 = raw.length > 2 ? (raw[2] & 0xff) : 0;
+            var b3 = raw.length > 3 ? (raw[3] & 0xff) : 0;
+            var isGzip = /gzip/i.test(ce) || (b0 == 0x1f && b1 == 0x8b);
+            var isZstd = /zstd/i.test(ce) || (b0 == 0x28 && b1 == 0xb5 && b2 == 0x2f && b3 == 0xfd);
+            if (isZstd) {
+                // 无法解 zstd，交由上层换 URL / 重试
+                text = '';
+            } else if (isGzip) {
+                var gis = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(raw));
+                var baos2 = new java.io.ByteArrayOutputStream();
+                while ((n = gis.read(buf)) != -1) baos2.write(buf, 0, n);
+                gis.close();
+                text = String(new java.lang.String(baos2.toByteArray(), 'UTF-8'));
+            } else {
+                text = String(new java.lang.String(raw, 'UTF-8'));
+            }
+        } catch (eRead) {
+            text = '';
+        }
     }
     var cok = '';
     try {
@@ -1153,12 +1238,21 @@ function clsrule(key, pageUrl) {
                 wCok = mergeCookie(wCok, wg.cookie || '');
                 if (wCok) writeWelfareCookie(site, wCok);
             }
+            // zstd/压缩脏数据：当作未通过验证，走规则内验证页
+            if (html && !isProbablyHtml(html) && !isWelfareGate(html)) {
+                html = '';
+            }
         }
         if (!html && target) {
             html = wCok ? (fetchPage(target, host, wCok) || '') : fetchSiteHtml(site, target);
         }
         if (!html && /^https?:/i.test(MY_URL || '')) html = fetchSiteHtml(site, MY_URL);
         try { refreshX5WebView(''); } catch (e) {}
+        if (isFl && (!html || !isProbablyHtml(html) || isWelfareGate(html))) {
+            pushWelfareManual(d, key, site, target || host + '/vodtype/124.html');
+            setHomeResult(res);
+            return;
+        }
         if (isWelfareGate(html)) {
             pushWelfareManual(d, key, site, target || host + '/vodtype/124.html');
             setHomeResult(res);
@@ -1166,6 +1260,11 @@ function clsrule(key, pageUrl) {
         }
         var list = parseList(html, site, host);
         if (!list.length) {
+            if (isFl) {
+                pushWelfareManual(d, key, site, target || host + '/vodtype/124.html');
+                setHomeResult(res);
+                return;
+            }
             d.push({
                 title: '分类无数据 · html=' + ((html || '').length) + (target ? ' · ' + target : ''),
                 url: target || host + '/',
