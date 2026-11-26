@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime42';
+var RULE_VER = 'v22-anime43';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
@@ -24,7 +24,10 @@ var SITES = {
         cate: '{host}/type/{id}-fypage.html[firstPage={host}/type/{id}.html]',
         search: '{host}/search/{wd}----------fypage---.html',
         needCookie: true,
-        list: 'body&&.daFJ_dJJfFHa&&li||body&&ul.daFJ_dJJfFHa&&li',
+        // 首页「今日更新」改为前端空 ul，跳过首页直进分类
+        skipHome: true,
+        // 新皮肤卡片是 .daFJ_dJJfFHa__gEI；旧 ul>li 保留兜底
+        list: 'body&&.daFJ_dJJfFHa__gEI||body&&ul.daFJ_dJJfFHa&&li',
         img: 'a&&data-original||.lazyload&&data-original||img&&data-original||img&&src',
         title: 'a&&title||h4&&a&&Text||a&&Text',
         desc: '.aaE_EaDE&&Text||.aaE_EaDEa&&Text||span&&Text',
@@ -151,14 +154,18 @@ function absUrl(url, base) {
     if (!url) return '';
     // 站点页 MY_URL 常为 hiker://empty，pd() 会拼出脏链接，这里一律丢掉
     if (/^hiker:/i.test(url)) return '';
-    if (/^https?:/i.test(url)) return url;
-    if (url.indexOf('//') == 0) return 'https:' + url;
-    base = base || '';
-    if (url.charAt(0) == '/') {
-        var m = (base + '/').match(/^(https?:\/\/[^\/]+)/i);
-        return (m ? m[1] : base.replace(/\/$/, '')) + url;
+    if (url.indexOf('//') == 0) url = 'https:' + url;
+    if (!/^https?:/i.test(url)) {
+        base = base || '';
+        if (url.charAt(0) == '/') {
+            var m = (base + '/').match(/^(https?:\/\/[^\/]+)/i);
+            url = (m ? m[1] : base.replace(/\/$/, '')) + url;
+        } else {
+            url = base.replace(/\/?$/, '/') + url;
+        }
     }
-    return base.replace(/\/?$/, '/') + url;
+    // omofun 图床常见 https://host//upload/...
+    return (url + '').replace(/^(https?:\/\/[^\/]+)\/+/, '$1/');
 }
 
 function imgUrl(img, host) {
@@ -375,9 +382,19 @@ function parseListFallback(html, host) {
     var out = [];
     var seen = {};
     if (!html) return out;
+    var m;
+    // Omofun 新卡片：lazyload a 上同时有 href/title/data-original
+    var reOmo = /<a\b[^>]*class="[^"]*lazyload[^"]*"[^>]*href="([^"]*\/anime\/[^"]+)"[^>]*title="([^"]*)"[^>]*data-original="([^"]*)"/gi;
+    while ((m = reOmo.exec(html)) && out.length < 60) {
+        var full0 = absUrl(m[1], host);
+        var t0 = (m[2] || '').replace(/^\s+|\s+$/g, '');
+        if (!full0 || !t0 || seen[full0] || !isDetailHref(full0)) continue;
+        seen[full0] = 1;
+        out.push({ title: t0, img: absUrl(m[3], host), desc: '', url: full0 });
+    }
+    if (out.length) return out;
     // title 在前 / href 在前 两种 <a>
     var re = /<a\b[^>]*?(?:title="([^"]+)"[^>]*?href="([^"]+)"|href="([^"]+)"[^>]*?title="([^"]+)")[^>]*>/gi;
-    var m;
     while ((m = re.exec(html)) && out.length < 60) {
         var title = (m[1] || m[4] || '').replace(/^\s+|\s+$/g, '');
         var href = m[2] || m[3] || '';
