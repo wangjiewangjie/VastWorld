@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime47';
+var RULE_VER = 'v22-anime48';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
@@ -499,13 +499,54 @@ function welfareCkFile(site) {
     return COOKIE_DIR + ((site && site.title) || 'amj85') + '_welfarecookie.txt';
 }
 
+function readWelfareSession(site) {
+    var raw = '';
+    try { raw = fetch(welfareCkFile(site), {}) || ''; } catch (e) { raw = ''; }
+    if (!raw) return { cookie: '', csrf: '', next: '', page: '' };
+    if (raw.charAt(0) == '{') {
+        try {
+            var o = JSON.parse(raw);
+            return {
+                cookie: o.c || o.cookie || '',
+                csrf: o.s || o.csrf || '',
+                next: o.n || o.next || '',
+                page: o.p || o.page || ''
+            };
+        } catch (e2) {}
+    }
+    return { cookie: raw, csrf: '', next: '', page: '' };
+}
+
 function readWelfareCookie(site) {
-    try { return fetch(welfareCkFile(site), {}) || ''; } catch (e) { return ''; }
+    return readWelfareSession(site).cookie || '';
+}
+
+function writeWelfareSession(site, sess) {
+    sess = sess || {};
+    var cok = sess.cookie || '';
+    if (!cok) return;
+    try {
+        writeFile(welfareCkFile(site), JSON.stringify({
+            v: 1,
+            c: cok,
+            s: sess.csrf || '',
+            n: sess.next || '',
+            p: sess.page || ''
+        }));
+    } catch (e) {
+        try { writeFile(welfareCkFile(site), cok); } catch (e2) {}
+    }
 }
 
 function writeWelfareCookie(site, cok) {
     if (!cok) return;
-    try { writeFile(welfareCkFile(site), cok); } catch (e) {}
+    var old = readWelfareSession(site);
+    writeWelfareSession(site, {
+        cookie: cok,
+        csrf: old.csrf || '',
+        next: old.next || '',
+        page: old.page || ''
+    });
 }
 
 function syncWelfareCookie(site, pageUrl) {
@@ -727,22 +768,49 @@ function pushWelfareManual(d, key, site, pageUrl) {
             else if (/\/(vodtype|vodshow)\/124\b/.test(link)) nextPath = '/vodtype/124.html';
         }
     } catch (e0) {}
-    // 每次进验证页开新会话，避免旧 PHPSESSID 与新 csrf 错配 → 403
-    var cok = '';
+    // csrf 必须与 PHPSESSID 同一次响应：不要先空会话再 merge getCookie（旧 SID 会盖掉新会话 → 403）
     var gateUrl = welfareIndexUrl(host, nextPath);
-    var gate = welfareFetchGate(host, gateUrl, '');
+    var cok = readWelfareCookie(site) || '';
+    var gate = welfareFetchGate(host, gateUrl, cok);
+    // 只合并本次响应 Set-Cookie；禁止再用 getCookie 覆盖
     cok = mergeCookie(cok, gate.cookie || '');
-    try { cok = mergeCookie(cok, getCookie(host) || getCookie(host + '/') || ''); } catch (eGc) {}
     var html = gate.body || '';
+    if (!isWelfareGate(html) || !hasPhpSession(cok)) {
+        // javaHttp 拿不到 Set-Cookie 时，改走海阔 fetch，让 jar 与页面同源
+        try {
+            var fh = {
+                'User-Agent': MOBILE_UA,
+                'Accept': 'text/html,application/xhtml+xml',
+                'Accept-Encoding': 'identity',
+                'Referer': host + '/'
+            };
+            if (cok) fh.Cookie = cok;
+            var fhtml = fetch(gateUrl, { headers: fh, timeout: 10000 }) || '';
+            if (isWelfareGate(fhtml)) {
+                html = fhtml;
+                try {
+                    // fetch 与 jar 同源：仅当本地还没有 SID 时才取 jar，绝不用旧 SID 覆盖已对齐会话
+                    if (!hasPhpSession(cok)) {
+                        cok = getCookie(host) || getCookie(host + '/') || getCookie(gateUrl) || cok;
+                    }
+                } catch (eGc) {}
+            }
+        } catch (eF) {}
+    }
     if (!isWelfareGate(html)) {
-        gate = welfareFetchGate(host, link, '');
+        gate = welfareFetchGate(host, link, cok);
         cok = mergeCookie(cok, gate.cookie || '');
         html = gate.body || html;
     }
     var parsed = welfareParseGate(html);
     if (!parsed.next || parsed.next == '/') parsed.next = nextPath;
-    // 先落盘会话再拉图，提交时以文件为准；图片 Set-Cookie 故意不合并
-    if (cok) writeWelfareCookie(site, cok);
+    // csrf+cookie 同文件落盘，提交只信文件，避免 myVar/getCookie 串会话
+    writeWelfareSession(site, {
+        cookie: cok,
+        csrf: parsed.csrf || '',
+        next: parsed.next || nextPath,
+        page: gateUrl
+    });
     var imgBag = welfareSaveCaptcha(host, cok, gateUrl);
     var img = (imgBag && typeof imgBag == 'object') ? (imgBag.url || '') : (imgBag || '');
     try {
@@ -795,36 +863,37 @@ function pushWelfareManual(d, key, site, pageUrl) {
                     var ans = String(input || '').replace(/\s+/g, '');
                     if (!/^[1-9]{4}$/.test(ans)) return 'toast://请输入4位数字（1-9）';
                     var host = '';
-                    var csrf = '';
-                    var nextPath = '/vodtype/124.html';
-                    var page = '';
                     var k = 'amj85';
                     try {
                         host = getMyVar('amj_w_host', '') || '';
-                        csrf = getMyVar('amj_w_csrf', '') || '';
-                        nextPath = getMyVar('amj_w_next', '') || nextPath;
-                        page = getMyVar('amj_w_page', '') || '';
                         k = getMyVar('amj_w_key', '') || k;
                     } catch (e1) {}
                     var site2 = getSite(k) || SITES.amj85;
                     if (!host) host = ((site2.flHost || site2.host) || '').replace(/\/$/, '');
-                    // 输入回调里 myVar 可能丢，优先读文件里的会话
-                    var cok2 = '';
-                    try { cok2 = readWelfareCookie(site2) || getMyVar('amj_w_cok', '') || ''; } catch (e0) {
-                        cok2 = readWelfareCookie(site2);
-                    }
+                    // 提交只信落盘会话（csrf+PHPSESSID 成对），禁止 getCookie 掺入旧 SID
+                    var sess = readWelfareSession(site2);
+                    var csrf = sess.csrf || '';
+                    var nextPath = sess.next || '/vodtype/124.html';
+                    var page = sess.page || '';
+                    var cok2 = sess.cookie || '';
                     try {
-                        if (!hasPhpSession(cok2)) {
-                            cok2 = mergeCookie(cok2, getCookie(host) || getCookie(host + '/') || '');
-                        }
-                    } catch (eGc2) {}
+                        if (!csrf) csrf = getMyVar('amj_w_csrf', '') || '';
+                        if (!page) page = getMyVar('amj_w_page', '') || '';
+                        if (!sess.next) nextPath = getMyVar('amj_w_next', '') || nextPath;
+                        if (!hasPhpSession(cok2)) cok2 = getMyVar('amj_w_cok', '') || '';
+                    } catch (e0) {}
                     if (!csrf) return 'toast://验证已过期，请点验证码刷新后重试';
                     if (!hasPhpSession(cok2)) {
                         refreshPage(false);
                         return 'toast://会话丢失，已刷新，请重新看图输入';
                     }
                     var r = welfareCheckPost(host, csrf, nextPath, ans, cok2, page || (host + '/welfare/index.html'));
-                    if (r.cookie) writeWelfareCookie(site2, r.cookie);
+                    writeWelfareSession(site2, {
+                        cookie: r.cookie || cok2,
+                        csrf: r.ok ? '' : csrf,
+                        next: nextPath,
+                        page: page
+                    });
                     try { putMyVar('amj_w_cok', r.cookie || cok2 || ''); } catch (e2) {}
                     if (!r.ok) {
                         refreshPage(false);
