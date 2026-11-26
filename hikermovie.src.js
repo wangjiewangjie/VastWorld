@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime52';
+var RULE_VER = 'v22-anime53';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
@@ -13,6 +13,16 @@ var RULE_BASES = [
 ];
 var COOKIE_DIR = 'hiker://files/rules/hksj/hksjcookie/';
 var SITE_ICO = 'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3';
+
+// 黑橙主题：橙强调；黑底跟随海阔深色模式
+var THEME_ORANGE = '#FF6A00';
+function themeOrange(s) {
+    return '\u2018\u2018' + String(s == null ? '' : s) + '\u2019\u2019';
+}
+function themeHtml(s) {
+    return '<font color="' + THEME_ORANGE + '"><b>' + String(s == null ? '' : s) + '</b></font>';
+}
+
 
 // ---------- 站点表（抓取 + 布局配置）----------
 var SITES = {
@@ -362,9 +372,9 @@ function cleanHttpUrl(u) {
 function pushOmofunManual(d, host, ckName, pageUrl, col) {
     col = col || 'text_center_1';
     var link = cleanHttpUrl(pageUrl) || (host + '/');
-    d.push({ title: '① 打开网页，点「继续访问」', url: link, col_type: col });
+    d.push({ title: themeOrange('①') + ' 打开网页，点「继续访问」', url: link, col_type: col });
     d.push({
-        title: '② 完成后点这里刷新',
+        title: themeOrange('②') + ' 完成后点这里刷新',
         url: $('hiker://empty#noLoading#').lazyRule((h, name, probe) => {
             eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
             var passed = omofunFetchPassed(h, probe, readCookie(h, probe) || '');
@@ -522,7 +532,7 @@ function pushCards(d, list, host, col) {
         var v = list[i];
         d.push({
             title: v.title,
-            desc: v.desc || '',
+            desc: v.desc ? themeOrange(v.desc) : '',
             pic_url: v.img ? imgUrl(v.img, host) : '',
             // 必须用 empty：$(http详情).rule 在部分机型会直接打开原网页而不是进二级
             url: $('hiker://empty#noHistory#').rule((name, detailUrl) => {
@@ -879,7 +889,7 @@ function pushWelfareManual(d, key, site, pageUrl) {
     } catch (eV) {}
 
     d.push({
-        title: '福利区需验证 · 看图输入 4 位数字',
+        title: themeOrange('福利区需验证') + ' · 看图输入 4 位数字',
         url: 'hiker://empty',
         col_type: 'text_center_1'
     });
@@ -895,7 +905,7 @@ function pushWelfareManual(d, key, site, pageUrl) {
     });
     if (!parsed.csrf || !hasPhpSession(cok)) {
         d.push({
-            title: '验证码加载失败，点此重试',
+            title: themeOrange('验证码加载失败，点此重试'),
             url: $('hiker://empty#noLoading#').lazyRule(() => {
                 refreshPage(false);
                 return 'toast://正在重试';
@@ -905,7 +915,7 @@ function pushWelfareManual(d, key, site, pageUrl) {
         return;
     }
     d.push({
-        title: '输入验证码',
+        title: themeOrange('输入验证码'),
         // 参数只走 myVar，避免 input:// + $.toString(..., args) 把 csrf/url 填进输入框
         url: $('hiker://empty#noLoading#').lazyRule(() => {
             eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
@@ -1284,7 +1294,7 @@ function hikhmrule() {
     var d = res.data;
     try {
         d.push({
-            title: '海阔世界 · ' + RULE_VER + ' · 轻触检查更新',
+            title: themeOrange('海阔世界') + ' · ' + RULE_VER + ' · 轻触检查更新',
             url: $('#noLoading#').lazyRule((bases, ver) => {
                 eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 return tryUpdateFrom(bases, ver);
@@ -1293,7 +1303,7 @@ function hikhmrule() {
         });
         var kw = getMyVar('hksjsearchtext', '');
         d.push({
-            title: '搜片名 / 演员',
+            title: themeHtml('搜'),
             // $.toString 回调在独立环境执行，必须把路径当参数传入，不能直接引用 RULE_JSON
             url: $.toString((jsonPath) => {
                 return $('hiker://empty#noRecordHistory#$$$' + jsonPath + '$$$' + input + '$$$fypage$$$').rule(() => {
@@ -1314,7 +1324,7 @@ function hikhmrule() {
             var group = groups[g] || {};
             var sites = group.list || [];
             if (group.type) {
-                d.push({ title: '· ' + group.type + ' ·', url: 'hiker://empty', col_type: 'text_center_1' });
+                d.push({ title: themeOrange('· ' + group.type + ' ·'), url: 'hiker://empty', col_type: 'text_center_1' });
             }
             for (var i = 0; i < sites.length; i++) {
                 var s = sites[i];
@@ -1349,7 +1359,7 @@ function hikhmerj() {
         var vhref = parts[4] || '';
         var site = getSite(key);
         if (!site) {
-            d.push({ title: '站点不可用', col_type: 'text_center_1' });
+            d.push({ title: themeOrange('站点不可用'), col_type: 'text_center_1' });
             setHomeResult(res);
             return;
         }
@@ -1361,7 +1371,7 @@ function hikhmerj() {
                 if (!types[i] || !ids[i]) continue;
                 // MY_URL 必须带 fypage，上滑才会替换成 2/3…；不能把第1页死链写进闭包
                 d.push({
-                    title: types[i],
+                    title: themeHtml(types[i]),
                     url: $('hiker://empty#noRecordHistory#$$cls$$' + key + '$$' + ids[i] + '$$fypage').rule(() => {
                         eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                         clsrule();
@@ -1392,7 +1402,7 @@ function hikhmerj() {
         }
         if (!list.length) {
             d.push({
-                title: pn > 1 ? '没有更多了' : '暂时没有内容，点上方分类试试',
+                title: themeOrange(pn > 1 ? '没有更多了' : '暂时没有内容，点上方分类试试'),
                 url: host + '/',
                 col_type: 'text_center_1'
             });
@@ -1423,7 +1433,7 @@ function clsrule(key, pageUrl) {
         }
         var site = getSite(key);
         if (!site) {
-            d.push({ title: '分类不可用', col_type: 'text_center_1' });
+            d.push({ title: themeOrange('分类不可用'), col_type: 'text_center_1' });
             setHomeResult(res);
             return;
         }
@@ -1485,7 +1495,7 @@ function clsrule(key, pageUrl) {
                 return;
             }
             d.push({
-                title: pn > 1 ? '没有更多了' : '这一分类暂时没有内容',
+                title: themeOrange(pn > 1 ? '没有更多了' : '这一分类暂时没有内容'),
                 url: target || host + '/',
                 col_type: 'text_center_1'
             });
@@ -1621,7 +1631,7 @@ function omerj(movTitle, detailUrl) {
         try { refreshX5WebView(''); } catch (e) {}
 
         d.push({
-            title: '全网搜「' + movTitle + '」',
+            title: themeHtml('全网搜「' + movTitle + '」'),
             url: $('hiker://empty#noHistory#$$$' + RULE_JSON + '$$$' + movTitle + '$$$fypage$$$').rule(() => {
                 eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 hiksearch();
@@ -1706,7 +1716,7 @@ function omerj(movTitle, detailUrl) {
                 try { tabName = pdfh(tabs[i], 'a&&Text||body&&Text') || tabName; } catch (e) {}
             }
             d.push({
-                title: tabName + '（' + list.length + '）',
+                title: themeOrange(tabName) + '（' + list.length + '）',
                 url: 'hiker://empty',
                 col_type: 'text_1'
             });
@@ -1724,7 +1734,7 @@ function omerj(movTitle, detailUrl) {
                     if (t && t.match(/(第|\d|-)*(集|话|期)/g)) t = t.replace(/第|集|话|期/g, '');
                 } catch (e) {}
                 d.push({
-                    title: t || ('第' + (j + 1)),
+                    title: themeHtml(t || ('第' + (j + 1))),
                     url: playLazy(host, link, t || movTitle, site.play),
                     col_type: list.length <= 4 ? 'text_2' : (isNaN(t) ? 'flex_button' : 'text_5'),
                     extra: {
@@ -1751,10 +1761,10 @@ function omerj(movTitle, detailUrl) {
                 plays.push({ link: hrefP, title: tt || ('线路' + plays.length) });
             }
             if (plays.length) {
-                d.push({ title: '选集 · ' + plays.length, url: 'hiker://empty', col_type: 'text_1' });
+                d.push({ title: themeOrange('选集 · ' + plays.length), url: 'hiker://empty', col_type: 'text_1' });
                 for (var pi = 0; pi < plays.length; pi++) {
                     d.push({
-                        title: plays[pi].title || ('第' + (pi + 1) + '集'),
+                        title: themeHtml(plays[pi].title || ('第' + (pi + 1) + '集')),
                         url: playLazy(host, plays[pi].link, plays[pi].title || movTitle, site.play),
                         col_type: plays.length <= 4 ? 'text_2' : 'flex_button',
                         extra: { id: host + '#' + plays[pi].link, referer: host }
@@ -1765,7 +1775,7 @@ function omerj(movTitle, detailUrl) {
         }
         if (!ep) {
             d.push({
-                title: '暂时没有可播放选集',
+                title: themeOrange('暂时没有可播放选集'),
                 url: 'toast://请换一个站点再试',
                 col_type: 'text_center_1'
             });
@@ -1890,7 +1900,7 @@ function hiksearch() {
         var jsonPath = parts[1] || RULE_JSON;
         var wd = parts[2] || '';
         d.push({
-            title: '搜「' + wd + '」· 选择站点',
+            title: themeOrange('搜「' + wd + '」') + ' · 选择站点',
             url: 'toast://点下面的站点开始搜索',
             col_type: 'text_center_1'
         });
@@ -1916,7 +1926,7 @@ function hiksearch() {
         }
         // 聚合改为二级页 .rule()，避免搜索页 lazyRule 空链接
         d.push({
-            title: '一次搜全部站点',
+            title: themeOrange('一次搜全部站点'),
             url: $('hiker://empty#noRecordHistory#noLoading#').rule((sitesJson, keyWd) => {
                 eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 hikAggSearch(sitesJson, keyWd);
@@ -1935,7 +1945,7 @@ function hikAggSearch(sitesJson, wd) {
     var d = res.data;
     try {
         wd = wd || '';
-        d.push({ title: '正在搜「' + wd + '」', col_type: 'text_center_1' });
+        d.push({ title: themeOrange('正在搜「' + wd + '」'), col_type: 'text_center_1' });
         var sites = [];
         try { sites = JSON.parse(sitesJson || '[]'); } catch (e) { sites = []; }
         if (!sites.length) sites = defaultSiteList();
@@ -1971,11 +1981,11 @@ function hikAggSearch(sitesJson, wd) {
                     d.push({ title: s.title + ' · 没有结果', url: url, col_type: 'text_1' });
                     continue;
                 }
-                d.push({ title: '· ' + s.title + ' · ' + list.length + ' 条', url: 'hiker://empty', col_type: 'text_1' });
+                d.push({ title: themeOrange('· ' + s.title + ' · ' + list.length + ' 条'), url: 'hiker://empty', col_type: 'text_1' });
                 for (var j = 0; j < list.length; j++) {
                     var v = list[j];
                     d.push({
-                        title: (wd ? v.title.replace(wd, '「' + wd + '」') : v.title),
+                        title: (wd ? v.title.replace(wd, themeOrange(wd)) : v.title),
                         desc: v.desc || '',
                         pic_url: v.img ? imgUrl(v.img, site.host) : '',
                         url: $('hiker://empty#noHistory#').rule((name, detailUrl) => {
@@ -1990,7 +2000,7 @@ function hikAggSearch(sitesJson, wd) {
                 d.push({ title: (sites[i] && sites[i].title ? sites[i].title : '站点') + ' · 请求失败', url: 'hiker://empty', col_type: 'text_1' });
             }
         }
-        if (!hit) d.push({ title: '没有搜到相关内容', url: 'hiker://empty', col_type: 'text_center_1' });
+        if (!hit) d.push({ title: themeOrange('没有搜到相关内容'), url: 'hiker://empty', col_type: 'text_center_1' });
     } catch (e) {
         d.push(errItem('agg', e));
     }
@@ -2016,7 +2026,7 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
         }
         var site = getSite(key) || resolveSiteByHost('', searchUrl || '');
         if (!site) {
-            d.push({ title: '搜索站点不可用', col_type: 'text_center_1' });
+            d.push({ title: themeOrange('搜索站点不可用'), col_type: 'text_center_1' });
             setHomeResult(res);
             return;
         }
@@ -2048,7 +2058,7 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
         }
         if (site.needCookie && isOmofunGate(html)) {
             d.push({
-                title: '访问较频繁，按下面两步继续',
+                title: themeOrange('访问较频繁') + '，按下面两步继续',
                 url: 'toast://先完成①，再点②刷新',
                 col_type: 'text_center_1'
             });
@@ -2057,14 +2067,14 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
             var list = parseList(html, site, host);
             if (!list.length) {
                 d.push({
-                    title: pn > 1 ? '没有更多了' : ('没有搜到「' + (wd || '') + '」'),
+                    title: themeOrange(pn > 1 ? '没有更多了' : ('没有搜到「' + (wd || '') + '」')),
                     url: pageUrl,
                     col_type: 'text_center_1'
                 });
             } else {
                 for (var i = 0; i < list.length; i++) {
                     var v = list[i];
-                    var show = wd ? v.title.replace(wd, '「' + wd + '」') : v.title;
+                    var show = wd ? v.title.replace(wd, themeOrange(wd)) : v.title;
                     d.push({
                         title: show + (v.desc ? ' ' + v.desc : ''),
                         pic_url: v.img ? imgUrl(v.img, host) : '',
