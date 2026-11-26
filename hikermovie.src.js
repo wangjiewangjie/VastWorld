@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime45';
+var RULE_VER = 'v22-anime46';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
@@ -292,29 +292,42 @@ function isProbablyHtml(html) {
 }
 
 function fetchPage(url, host, cookie) {
-    // 先裸请求：部分机型对自定义 header / Accept-Encoding 会拿回压缩脏数据
-    try {
-        var bare = fetch(url, { timeout: 10000 }) || '';
-        if (isProbablyHtml(bare) && !isOmofunGate(bare)) return bare;
-    } catch (eBare) {}
     var headers = {
         'User-Agent': MOBILE_UA,
-        'Referer': (host || url) + '/'
+        'Referer': (host || url) + '/',
+        'Accept-Encoding': 'identity'
     };
-    try {
-        var html0 = fetch(url, { headers: headers, timeout: 10000 }) || '';
-        if (isProbablyHtml(html0) && !isOmofunGate(html0)) return html0;
-    } catch (e0) {}
+    // 有 cookie 时必须先带 cookie：裸请求会先撞上福利验证页（也是合法 HTML），导致详情反复要验证码
     if (cookie) {
         headers.Cookie = cookie;
         try {
-            var html = fetch(url, { headers: headers, timeout: 10000 }) || '';
-            if (isProbablyHtml(html)) return html;
-        } catch (e) {}
+            var htmlC = fetch(url, { headers: headers, timeout: 10000 }) || '';
+            if (isProbablyHtml(htmlC) && !isOmofunGate(htmlC) && !isWelfareGate(htmlC)) return htmlC;
+        } catch (eC) {}
+        try {
+            var jr = javaHttp('GET', url, headers, null);
+            if (jr && jr.body && isProbablyHtml(jr.body) && !isOmofunGate(jr.body) && !isWelfareGate(jr.body)) return jr.body;
+            // 仍是验证页则把验证页交回去，上层走规则内验证
+            if (jr && jr.body && isWelfareGate(jr.body)) return jr.body;
+        } catch (eJ) {}
     }
+    // 先裸请求：部分机型对自定义 header / Accept-Encoding 会拿回压缩脏数据
+    try {
+        var bare = fetch(url, { timeout: 10000 }) || '';
+        if (isProbablyHtml(bare) && !isOmofunGate(bare) && !isWelfareGate(bare)) return bare;
+    } catch (eBare) {}
+    try {
+        var html0 = fetch(url, { headers: {
+            'User-Agent': MOBILE_UA,
+            'Referer': (host || url) + '/',
+            'Accept-Encoding': 'identity'
+        }, timeout: 10000 }) || '';
+        if (isProbablyHtml(html0) && !isOmofunGate(html0) && !isWelfareGate(html0)) return html0;
+        if (isWelfareGate(html0)) return html0;
+    } catch (e0) {}
     try {
         var html2 = request(url) || '';
-        if (isProbablyHtml(html2)) return html2;
+        if (isProbablyHtml(html2) && !isWelfareGate(html2)) return html2;
         if (html2 && html2.length > 5000 && html2.substring(0, 5) != 'error') return html2;
         return '';
     } catch (e2) { return ''; }
@@ -553,13 +566,13 @@ function welfareFetchGate(host, pageUrl, cok) {
     }
 }
 
-function welfareSaveCaptcha(host, cok) {
+function welfareSaveCaptcha(host, cok, referer) {
     host = (host || '').replace(/\/$/, '');
     // 服务端返回 image/png，必须存成 .png，否则海阔常显示裂图
     var imgUrl = host + '/welfare/image.html?t=' + Date.now();
     var headers = {
         'User-Agent': MOBILE_UA,
-        'Referer': host + '/welfare/index.html',
+        'Referer': referer || (host + '/welfare/index.html'),
         'Accept': 'image/png,image/*,*/*',
         'Accept-Encoding': 'identity'
     };
@@ -577,27 +590,40 @@ function welfareSaveCaptcha(host, cok) {
         while ((n = stream.read(buf)) != -1) baos.write(buf, 0, n);
         stream.close();
         var bytes = baos.toByteArray();
+        var newCok = '';
         try {
-            var scImg = conn.getHeaderFields();
-            // 验证码图可能续 session，调用方应合并 cookie；这里只落盘图片
+            var fields = conn.getHeaderFields();
+            if (fields) {
+                var keys = fields.keySet().toArray();
+                for (var i = 0; i < keys.length; i++) {
+                    var key = keys[i] == null ? '' : String(keys[i]);
+                    if (!/^set-cookie$/i.test(key)) continue;
+                    var vals = fields.get(keys[i]);
+                    if (!vals) continue;
+                    for (var j = 0; j < vals.size(); j++) newCok = mergeCookie(newCok, String(vals.get(j)).split(';')[0]);
+                }
+            }
         } catch (eH) {}
+        try { conn.disconnect(); } catch (eD) {}
         var dir = new java.io.File('/storage/emulated/0/Android/data/com.example.hikerview/files/Documents/Hiker/cache');
         try { if (!dir.exists()) dir.mkdirs(); } catch (e0) {}
         var file = new java.io.File(dir, 'amj_welfare.png');
+        var fileUrl = '';
         try {
             var fos = new java.io.FileOutputStream(file);
             fos.write(bytes);
             fos.close();
-            return 'file://' + file.getAbsolutePath();
+            fileUrl = 'file://' + file.getAbsolutePath();
         } catch (e1) {
             file = java.io.File.createTempFile('amj_welfare', '.png');
             var fos2 = new java.io.FileOutputStream(file);
             fos2.write(bytes);
             fos2.close();
-            return 'file://' + file.getAbsolutePath();
+            fileUrl = 'file://' + file.getAbsolutePath();
         }
+        return { url: fileUrl, cookie: newCok };
     } catch (e) {
-        return imgUrl;
+        return { url: imgUrl, cookie: '' };
     }
 }
 
@@ -618,7 +644,10 @@ function welfareCheckPost(host, csrf, nextPath, answer, cok, referer) {
         conn.setRequestMethod('POST');
         conn.setDoOutput(true);
         conn.setRequestProperty('User-Agent', MOBILE_UA);
-        conn.setRequestProperty('Referer', referer || (host + '/welfare/index.html'));
+        // 强制验证页 Referer，详情 URL 作 Referer 会直接 403
+        var ref = referer || (host + '/welfare/index.html');
+        if (!/welfare/i.test(ref)) ref = host + '/welfare/index.html?next=' + enc(nextPath || '/vodtype/124.html');
+        conn.setRequestProperty('Referer', ref);
         conn.setRequestProperty('Origin', host);
         conn.setRequestProperty('Accept-Encoding', 'identity');
         conn.setRequestProperty('Content-Type', 'application/x-www-form-urlencoded');
@@ -690,8 +719,12 @@ function pushWelfareManual(d, key, site, pageUrl) {
         var mNext = (link || '').match(/[?&]next=([^&]+)/);
         if (mNext) {
             try { nextPath = decodeURIComponent(mNext[1]); } catch (eN) { nextPath = mNext[1]; }
-        } else if (/\/(vodtype|vodshow)\/124\b/.test(link)) {
-            nextPath = '/vodtype/124.html';
+        } else {
+            // 详情/播放页验证：next 必须是真实目标路径，验证后才能回到该页
+            var pathOnly = (link || '').replace(/^https?:\/\/[^\/]+/i, '');
+            pathOnly = (pathOnly || '').split('#')[0];
+            if (pathOnly && pathOnly.charAt(0) == '/' && !/welfare/i.test(pathOnly)) nextPath = pathOnly;
+            else if (/\/(vodtype|vodshow)\/124\b/.test(link)) nextPath = '/vodtype/124.html';
         }
     } catch (e0) {}
     var cok = readWelfareCookie(site) || '';
@@ -708,15 +741,25 @@ function pushWelfareManual(d, key, site, pageUrl) {
         html = gate.body || html;
     }
     var parsed = welfareParseGate(html);
-    if (!parsed.next) parsed.next = nextPath;
-    var img = welfareSaveCaptcha(host, cok);
+    if (!parsed.next || parsed.next == '/') parsed.next = nextPath;
+    var imgBag = welfareSaveCaptcha(host, cok, gateUrl);
+    var img = imgBag;
+    if (imgBag && typeof imgBag == 'object') {
+        img = imgBag.url || '';
+        if (imgBag.cookie) {
+            cok = mergeCookie(cok, imgBag.cookie);
+            writeWelfareCookie(site, cok);
+        }
+    }
     try {
         putMyVar('amj_w_host', host);
         putMyVar('amj_w_csrf', parsed.csrf || '');
-        putMyVar('amj_w_next', parsed.next || '/vodtype/124.html');
-        putMyVar('amj_w_page', link);
+        putMyVar('amj_w_next', parsed.next || nextPath);
+        // Referer 必须是验证页本身，用详情 URL 当 Referer 会 403
+        putMyVar('amj_w_page', gateUrl);
         putMyVar('amj_w_key', key || 'amj85');
         putMyVar('amj_w_cok', cok || '');
+        putMyVar('amj_w_target', link);
     } catch (eV) {}
 
     d.push({
@@ -1361,23 +1404,40 @@ function omerj(movTitle, detailUrl) {
         // 有真实详情 URL 时直接抓，不信任从 hiker://empty 父页带过来的 getResCode
         var html = '';
         var detailCok = '';
-        if (site.flHost && /amj|aimeiju/i.test(host + pageUrl)) {
-            detailCok = syncWelfareCookie(site, pageUrl) || readWelfareCookie(site);
+        var needWelfare = !!(site.flHost && /amj|aimeiju|amj85/i.test(host + pageUrl));
+        if (needWelfare) {
+            detailCok = readWelfareCookie(site) || syncWelfareCookie(site, pageUrl) || '';
+            // 福利站详情强制 javaHttp + cookie，避免裸 fetch 先撞验证页
+            if (pageUrl) {
+                try {
+                    var dj = javaHttp('GET', pageUrl, {
+                        'User-Agent': MOBILE_UA,
+                        'Cookie': detailCok,
+                        'Referer': (site.flHost || host) + '/',
+                        'Accept-Encoding': 'identity'
+                    }, null);
+                    html = (dj && dj.body) || '';
+                    if (dj && dj.cookie) {
+                        detailCok = mergeCookie(detailCok, dj.cookie);
+                        writeWelfareCookie(site, detailCok);
+                    }
+                } catch (eDj) {}
+            }
         }
-        if (pageUrl) html = fetchPage(pageUrl, host, detailCok) || '';
+        if ((!html || html.length < 800) && pageUrl) html = fetchPage(pageUrl, host, detailCok) || html;
         if ((!html || html.length < 800) && site.altHosts) {
             html = fetchSiteHtml(site, pageUrl) || html;
         }
         if (!html || html.length < 800 || !/(play-list|playlist|player_aaaa|channel-tab|stui-content__playlist|stui-play__list|module-play-list|con_playlist|pk-episodes|amj-source)/i.test(html)) {
             try {
                 var gr = (getResCode() || '').replace(/<!--([\S\s]*?)-->/g, '');
-                if (gr && gr.length > html.length) html = gr;
+                if (gr && gr.length > html.length && !isWelfareGate(gr)) html = gr;
             } catch (e) {}
             if (pageUrl && (!html || html.length < 800)) html = fetchPage(pageUrl, host, detailCok) || html;
         }
         try { html = (html || '').replace(/<!--([\S\s]*?)-->/g, ''); } catch (e) {}
-        if (isWelfareGate(html)) {
-            pushWelfareManual(d, siteKeyOf({ key: '', url: host }) || 'amj85', site, pageUrl || host + '/');
+        if (isWelfareGate(html) || (needWelfare && html && !isProbablyHtml(html))) {
+            pushWelfareManual(d, siteKeyOf({ key: 'amj85', url: host }) || 'amj85', site, pageUrl || host + '/');
             setHomeResult(res);
             return;
         }
@@ -1492,7 +1552,25 @@ function omlazy() {
             return play + '#isVideo=true#';
         }
 
-        var html = fetchPage(src, host) || '';
+        var playCok = '';
+        try {
+            if (/amj|aimeiju|amj85/i.test(host + src)) {
+                playCok = readWelfareCookie(SITES.amj85) || '';
+            }
+        } catch (ePc) {}
+        var html = fetchPage(src, host, playCok) || '';
+        if (playCok && (isWelfareGate(html) || !html)) {
+            try {
+                var pj = javaHttp('GET', src, {
+                    'User-Agent': MOBILE_UA,
+                    'Cookie': playCok,
+                    'Referer': host + '/',
+                    'Accept-Encoding': 'identity'
+                }, null);
+                if (pj && pj.body) html = pj.body;
+                if (pj && pj.cookie) writeWelfareCookie(SITES.amj85, mergeCookie(playCok, pj.cookie));
+            } catch (ePj) {}
+        }
         // MacCMS player_aaaa：用括号计数，避免 vod_data 嵌套截断
         var aaaaJson = extractPlayerAaaa(html);
         if (!aaaaJson) {
