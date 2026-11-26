@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime50';
+var RULE_VER = 'v22-anime51';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
@@ -1359,14 +1359,13 @@ function hikhmerj() {
         if (pn == 1) {
             for (var i = 0; i < types.length; i++) {
                 if (!types[i] || !ids[i]) continue;
-                // 不用远程 URL 做 .rule 入口，避免站点慢/压缩导致一直 loading
-                var cateFirst = cateUrl(site, host, ids[i], 1);
+                // MY_URL 必须带 fypage，上滑才会替换成 2/3…；不能把第1页死链写进闭包
                 d.push({
                     title: types[i],
-                    url: $('hiker://empty#noRecordHistory#').rule((k, page) => {
+                    url: $('hiker://empty#noRecordHistory#$$cls$$' + key + '$$' + ids[i] + '$$fypage').rule(() => {
                         eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
-                        clsrule(k, page);
-                    }, key, cateFirst),
+                        clsrule();
+                    }),
                     col_type: 'scroll_button'
                 });
             }
@@ -1410,7 +1409,18 @@ function clsrule(key, pageUrl) {
     var res = { data: [] };
     var d = res.data;
     try {
-        key = key || '';
+        // MY_URL: hiker://empty#...$$cls$$key$$cateId$$fypage
+        var parts = String(MY_URL || '').split('$$');
+        var cateId = '';
+        var pn = 1;
+        if ((parts[1] || '') === 'cls') {
+            key = parts[2] || key || '';
+            cateId = parts[3] || '';
+            pn = pageNum(parts[4]);
+            pageUrl = '';
+        } else {
+            key = key || '';
+        }
         var site = getSite(key);
         if (!site) {
             d.push({ title: '未知分类站点: ' + key, col_type: 'text_center_1' });
@@ -1418,11 +1428,17 @@ function clsrule(key, pageUrl) {
             return;
         }
         var host = site.host;
-        var target = cleanHttpUrl(pageUrl) || cleanHttpUrl(MY_URL) || '';
+        var target = '';
+        if (cateId) {
+            target = cateUrl(site, host, cateId, pn);
+        } else {
+            target = cleanHttpUrl(pageUrl) || cleanHttpUrl(MY_URL) || '';
+        }
         // 福利分类强制走 flHost，避免 aimeiju.org/124 的 404
-        if (site.flHost && /\/(vodtype|vodshow)\/124\b/.test(target || '')) {
+        if (site.flHost && (/\/(vodtype|vodshow)\/124\b/.test(target || '') || String(cateId) === '124')) {
             host = site.flHost;
             if (target) target = swapHost(target, site.host, site.flHost);
+            else if (cateId) target = cateUrl(site, host, cateId, pn);
         }
         var html = '';
         // 仅当父页已是真实站点 HTML 时才用 getResCode，避免 empty 入口脏数据
@@ -1453,25 +1469,23 @@ function clsrule(key, pageUrl) {
         }
         if (!html && /^https?:/i.test(MY_URL || '')) html = fetchSiteHtml(site, MY_URL);
         try { refreshX5WebView(''); } catch (e) {}
-        if (isFl && (!html || !isProbablyHtml(html) || isWelfareGate(html))) {
-            pushWelfareManual(d, key, site, target || host + '/vodtype/124.html');
-            setHomeResult(res);
-            return;
-        }
-        if (isWelfareGate(html)) {
-            pushWelfareManual(d, key, site, target || host + '/vodtype/124.html');
-            setHomeResult(res);
-            return;
+        if (isWelfareGate(html) || (isFl && (!html || !isProbablyHtml(html)))) {
+            // 翻页空结果不算验证失败
+            if (pn <= 1) {
+                pushWelfareManual(d, key, site, target || host + '/vodtype/124.html');
+                setHomeResult(res);
+                return;
+            }
         }
         var list = parseList(html, site, host);
         if (!list.length) {
-            if (isFl) {
+            if (isFl && pn <= 1 && (isWelfareGate(html) || !html)) {
                 pushWelfareManual(d, key, site, target || host + '/vodtype/124.html');
                 setHomeResult(res);
                 return;
             }
             d.push({
-                title: '分类无数据 · html=' + ((html || '').length) + (target ? ' · ' + target : ''),
+                title: pn > 1 ? '没有更多了' : ('分类无数据 · html=' + ((html || '').length)),
                 url: target || host + '/',
                 col_type: 'text_center_1'
             });
@@ -1887,21 +1901,16 @@ function hiksearch() {
             var key = siteKeyOf(s);
             var site = getSite(key);
             if (!site) continue;
-            var url = fillTpl(site.search, {
-                host: site.host,
-                wd: wd,
-                ewd: encodeURIComponent(wd)
-            }).replace(/fypage/g, '1');
-            // 不用远程 URL 做 .rule 入口：Omofun 验证页会一直 loading
+            // 搜索二级也带 fypage，上滑翻页
             var ico = (s.ico || SITE_ICO) + '@Referer=';
             d.push({
                 title: s.title,
                 img: ico,
                 pic_url: ico,
-                url: $('hiker://empty#noRecordHistory#').rule((ck, k, w, searchUrl) => {
+                url: $('hiker://empty#noRecordHistory#$$sea$$' + key + '$$' + encodeURIComponent(wd) + '$$fypage').rule(() => {
                     eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
-                    hikseaerji(ck, k, w, searchUrl);
-                }, s.title, key, wd, url),
+                    hikseaerji();
+                }),
                 col_type: 'icon_2_card'
             });
         }
@@ -1992,7 +2001,19 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
     var res = { data: [] };
     var d = res.data;
     try {
-        key = key || '';
+        // MY_URL: hiker://empty#...$$sea$$key$$encodedWd$$fypage
+        var parts = String(MY_URL || '').split('$$');
+        var pn = 1;
+        if ((parts[1] || '') === 'sea') {
+            key = parts[2] || key || '';
+            try { wd = decodeURIComponent(parts[3] || wd || ''); } catch (eW) { wd = parts[3] || wd || ''; }
+            pn = pageNum(parts[4]);
+            searchUrl = '';
+            cktitle = '';
+        } else {
+            key = key || '';
+            wd = wd || '';
+        }
         var site = getSite(key) || resolveSiteByHost('', searchUrl || '');
         if (!site) {
             d.push({ title: '未知搜索站点: ' + key, col_type: 'text_center_1' });
@@ -2000,7 +2021,16 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
             return;
         }
         var host = site.host;
-        var pageUrl = cleanHttpUrl(searchUrl) || cleanHttpUrl(MY_URL) || (host + '/');
+        if (!cktitle) cktitle = site.title;
+        var pageUrl = '';
+        if (searchUrl && pn <= 1) pageUrl = cleanHttpUrl(searchUrl) || '';
+        if (!pageUrl) {
+            pageUrl = fillTpl(site.search, {
+                host: host,
+                wd: wd,
+                ewd: encodeURIComponent(wd)
+            }).replace(/fypage/g, String(pn));
+        }
         var cookie = '';
         try {
             if (site.needCookie) cookie = fetch(COOKIE_DIR + (cktitle || site.title) + 'cookie.txt', {}) || '';
@@ -2026,7 +2056,11 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
         } else {
             var list = parseList(html, site, host);
             if (!list.length) {
-                d.push({ title: '没有搜到「' + (wd || '') + '」', url: pageUrl, col_type: 'text_center_1' });
+                d.push({
+                    title: pn > 1 ? '没有更多了' : ('没有搜到「' + (wd || '') + '」'),
+                    url: pageUrl,
+                    col_type: 'text_center_1'
+                });
             } else {
                 for (var i = 0; i < list.length; i++) {
                     var v = list[i];
