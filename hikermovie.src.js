@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime48';
+var RULE_VER = 'v22-anime49';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
@@ -1442,6 +1442,11 @@ function playLazy(host, link, title, playType) {
 
 function extractPlayerAaaa(html) {
     if (!html) return '';
+    // 爱美剧：优先读 #amj-player-data，避免命中后面的 {vod_data:{}} 空壳
+    var amj = extractAmjPlayerData(html);
+    if (amj && amj.url) {
+        try { return JSON.stringify(amj); } catch (e0) {}
+    }
     var i = html.indexOf('player_aaaa');
     if (i < 0) return '';
     var start = html.indexOf('{', i);
@@ -1456,6 +1461,58 @@ function extractPlayerAaaa(html) {
         }
     }
     return '';
+}
+
+function extractAmjPlayerData(html) {
+    if (!html) return null;
+    try {
+        var m = html.match(/id=["']amj-player-data["'][^>]*>(\{[\s\S]*?\})<\/script>/i) ||
+            html.match(/<script[^>]*id=["']amj-player-data["'][^>]*>(\{[\s\S]*?\})<\/script>/i);
+        if (m && m[1]) return JSON.parse(m[1]);
+    } catch (e) {}
+    return null;
+}
+
+// 爱美剧 encrypt=4：POST /amj-play.php 用 token 换真实播放地址
+function amjResolvePlayToken(host, token, cookie, referer) {
+    host = (host || '').replace(/\/$/, '');
+    if (!host || !token) return { ok: false, msg: '缺少播放凭据' };
+    var body = '';
+    try {
+        body = 'token=' + String(java.net.URLEncoder.encode(String(token), 'UTF-8'));
+    } catch (eEnc) {
+        body = 'token=' + encodeURIComponent(String(token));
+    }
+    try {
+        var headers = {
+            'User-Agent': MOBILE_UA,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json,text/plain,*/*',
+            'Accept-Encoding': 'identity',
+            'Origin': host,
+            'Referer': referer || (host + '/')
+        };
+        if (cookie) headers.Cookie = cookie;
+        var jr = javaHttp('POST', host + '/amj-play.php', headers, body);
+        var text = (jr && jr.body) || '';
+        var j = null;
+        try { j = JSON.parse(text); } catch (eJ) { j = null; }
+        if (jr && jr.cookie) cookie = mergeCookie(cookie || '', jr.cookie);
+        if (j && j.url && /^https?:/i.test(j.url)) {
+            return { ok: true, url: j.url, type: j.type || '', cookie: cookie };
+        }
+        if (j && j.error == 'captcha_required') {
+            return { ok: false, msg: '播放需验证码，请稍后重试或换线路', cookie: cookie, captcha: true };
+        }
+        if (j && (j.error == 'expired_or_invalid' || /过期/.test(j.message || ''))) {
+            return { ok: false, msg: '播放凭据过期，请返回重进', cookie: cookie };
+        }
+        if (j && j.message) return { ok: false, msg: j.message, cookie: cookie };
+        if (jr && jr.code == 410) return { ok: false, msg: '播放凭据过期，请返回重进', cookie: cookie };
+        return { ok: false, msg: '换链失败(' + ((jr && jr.code) || '?') + ')', cookie: cookie };
+    } catch (e) {
+        return { ok: false, msg: '换链异常', cookie: cookie || '' };
+    }
 }
 
 function omerj(movTitle, detailUrl) {
@@ -1648,25 +1705,58 @@ function omlazy() {
             return play + '#isVideo=true#';
         }
 
+        var isAmj = /amj|aimeiju|amj85/i.test(host + src);
         var playCok = '';
         try {
-            if (/amj|aimeiju|amj85/i.test(host + src)) {
+            if (isAmj) {
                 playCok = readWelfareCookie(SITES.amj85) || '';
+                // host 跟播放 URL 走，避免把 aimeiju 普通片误切到 amj85
+                try {
+                    var hm = (src + '/').match(/(https?:\/\/[^\/\s]+)/i);
+                    if (hm) host = hm[1];
+                } catch (eH) {}
             }
         } catch (ePc) {}
-        var html = fetchPage(src, host, playCok) || '';
-        if (playCok && (isWelfareGate(html) || !html)) {
+        var html = '';
+        // 爱美剧/福利：先带 cookie 的 javaHttp，避免裸 fetch 撞验证页或丢掉 encrypt=4 数据
+        if (isAmj) {
             try {
                 var pj = javaHttp('GET', src, {
                     'User-Agent': MOBILE_UA,
-                    'Cookie': playCok,
+                    'Cookie': playCok || '',
                     'Referer': host + '/',
+                    'Accept': 'text/html,application/xhtml+xml',
                     'Accept-Encoding': 'identity'
                 }, null);
                 if (pj && pj.body) html = pj.body;
-                if (pj && pj.cookie) writeWelfareCookie(SITES.amj85, mergeCookie(playCok, pj.cookie));
+                if (pj && pj.cookie) {
+                    playCok = mergeCookie(playCok, pj.cookie);
+                    writeWelfareCookie(SITES.amj85, playCok);
+                }
             } catch (ePj) {}
         }
+        if (!html || html.length < 400) html = fetchPage(src, host, playCok) || html;
+        if (isWelfareGate(html)) return 'toast://播放页需验证，请返回福利分类重新验证';
+
+        // 爱美剧 #amj-player-data（encrypt=4 需服务端换链）
+        var amjData = isAmj ? extractAmjPlayerData(html) : null;
+        if (amjData && amjData.url) {
+            var enc = Number(amjData.encrypt || 0);
+            var uAmj = amjData.url || '';
+            if (enc === 4 || (!/^https?:/i.test(uAmj) && enc > 2)) {
+                var resolved = amjResolvePlayToken(host, uAmj, playCok, src);
+                if (resolved.cookie) {
+                    playCok = resolved.cookie;
+                    writeWelfareCookie(SITES.amj85, playCok);
+                }
+                if (resolved.ok && resolved.url) return resolved.url + '#isVideo=true#';
+                return 'toast://' + (resolved.msg || '播放换链失败');
+            }
+            if (enc === 1) uAmj = unescape(uAmj);
+            else if (enc === 2) uAmj = unescape(base64Decode(uAmj));
+            if (uAmj && /^https?:/i.test(uAmj)) return uAmj + '#isVideo=true#';
+        }
+
         // MacCMS player_aaaa：用括号计数，避免 vod_data 嵌套截断
         var aaaaJson = extractPlayerAaaa(html);
         if (!aaaaJson) {
@@ -1677,6 +1767,13 @@ function omlazy() {
             if (aaaaJson) {
                 eval('var player_aaaa=' + aaaaJson);
                 var url = player_aaaa.url || '';
+                var enc2 = Number(player_aaaa.encrypt || 0);
+                if (enc2 === 4 || (url && !/^https?:/i.test(url) && enc2 > 2)) {
+                    var r2 = amjResolvePlayToken(host, url, playCok, src);
+                    if (r2.cookie) writeWelfareCookie(SITES.amj85, r2.cookie);
+                    if (r2.ok && r2.url) return r2.url + '#isVideo=true#';
+                    return 'toast://' + (r2.msg || '播放换链失败');
+                }
                 if (player_aaaa.encrypt == '1' || player_aaaa.encrypt == 1) url = unescape(url);
                 else if (player_aaaa.encrypt == '2' || player_aaaa.encrypt == 2) url = unescape(base64Decode(url));
                 if (url && /^https?:/i.test(url)) return url + '#isVideo=true#';
