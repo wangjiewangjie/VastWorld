@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime46';
+var RULE_VER = 'v22-anime47';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
@@ -590,20 +590,7 @@ function welfareSaveCaptcha(host, cok, referer) {
         while ((n = stream.read(buf)) != -1) baos.write(buf, 0, n);
         stream.close();
         var bytes = baos.toByteArray();
-        var newCok = '';
-        try {
-            var fields = conn.getHeaderFields();
-            if (fields) {
-                var keys = fields.keySet().toArray();
-                for (var i = 0; i < keys.length; i++) {
-                    var key = keys[i] == null ? '' : String(keys[i]);
-                    if (!/^set-cookie$/i.test(key)) continue;
-                    var vals = fields.get(keys[i]);
-                    if (!vals) continue;
-                    for (var j = 0; j < vals.size(); j++) newCok = mergeCookie(newCok, String(vals.get(j)).split(';')[0]);
-                }
-            }
-        } catch (eH) {}
+        // 验证码图若回写新 PHPSESSID，会让页面上的 csrf 失效 → 提交 403；忽略图片的 Set-Cookie
         try { conn.disconnect(); } catch (eD) {}
         var dir = new java.io.File('/storage/emulated/0/Android/data/com.example.hikerview/files/Documents/Hiker/cache');
         try { if (!dir.exists()) dir.mkdirs(); } catch (e0) {}
@@ -621,7 +608,7 @@ function welfareSaveCaptcha(host, cok, referer) {
             fos2.close();
             fileUrl = 'file://' + file.getAbsolutePath();
         }
-        return { url: fileUrl, cookie: newCok };
+        return { url: fileUrl, cookie: '' };
     } catch (e) {
         return { url: imgUrl, cookie: '' };
     }
@@ -635,6 +622,8 @@ function welfareCheckPost(host, csrf, nextPath, answer, cok, referer) {
             return encodeURIComponent(String(s));
         }
     };
+    if (!csrf) return { ok: false, msg: '缺少csrf，请刷新验证码', cookie: cok || '' };
+    if (!hasPhpSession(cok)) return { ok: false, msg: '会话丢失，请点验证码刷新', cookie: cok || '' };
     var body = 'csrf=' + enc(csrf) + '&next=' + enc(nextPath || '/vodtype/124.html') + '&answer=' + enc(answer);
     try {
         var conn = new java.net.URL(checkUrl).openConnection();
@@ -644,14 +633,21 @@ function welfareCheckPost(host, csrf, nextPath, answer, cok, referer) {
         conn.setRequestMethod('POST');
         conn.setDoOutput(true);
         conn.setRequestProperty('User-Agent', MOBILE_UA);
-        // 强制验证页 Referer，详情 URL 作 Referer 会直接 403
-        var ref = referer || (host + '/welfare/index.html');
-        if (!/welfare/i.test(ref)) ref = host + '/welfare/index.html?next=' + enc(nextPath || '/vodtype/124.html');
+        // 强制验证页 Referer；POST 不要带 gzip（实测 Accept-Encoding:gzip 会 403）
+        var ref = referer || '';
+        if (!/welfare\/index/i.test(ref)) {
+            try {
+                ref = host + '/welfare/index.html?next=' + enc(nextPath || '/vodtype/124.html');
+            } catch (eR) {
+                ref = host + '/welfare/index.html';
+            }
+        }
         conn.setRequestProperty('Referer', ref);
         conn.setRequestProperty('Origin', host);
+        conn.setRequestProperty('Accept', 'text/html,application/xhtml+xml,*/*');
         conn.setRequestProperty('Accept-Encoding', 'identity');
         conn.setRequestProperty('Content-Type', 'application/x-www-form-urlencoded');
-        if (cok) conn.setRequestProperty('Cookie', cok);
+        conn.setRequestProperty('Cookie', cok);
         var bytes = new java.lang.String(body).getBytes('UTF-8');
         conn.setRequestProperty('Content-Length', String(bytes.length));
         var os = conn.getOutputStream();
@@ -660,20 +656,7 @@ function welfareCheckPost(host, csrf, nextPath, answer, cok, referer) {
         os.close();
         var code = 0;
         try { code = conn.getResponseCode(); } catch (eC) { code = -1; }
-        var newCok = cok || '';
-        try {
-            var fields = conn.getHeaderFields();
-            if (fields) {
-                var keys = fields.keySet().toArray();
-                for (var i = 0; i < keys.length; i++) {
-                    var key = keys[i] == null ? '' : String(keys[i]);
-                    if (!/^set-cookie$/i.test(key)) continue;
-                    var vals = fields.get(keys[i]);
-                    if (!vals) continue;
-                    for (var j = 0; j < vals.size(); j++) newCok = mergeCookie(newCok, String(vals.get(j)).split(';')[0]);
-                }
-            }
-        } catch (eH) {}
+        var newCok = mergeCookie(cok || '', collectSetCookies(conn));
         var loc = '';
         try { loc = conn.getHeaderField('Location') || ''; } catch (eL) {}
         var text = '';
@@ -681,22 +664,39 @@ function welfareCheckPost(host, csrf, nextPath, answer, cok, referer) {
             var stream = null;
             try { stream = code >= 400 ? conn.getErrorStream() : conn.getInputStream(); } catch (eS) {}
             if (stream) {
-                var reader = new java.io.BufferedReader(new java.io.InputStreamReader(stream, 'UTF-8'));
-                var sb = new java.lang.StringBuilder();
-                var line;
-                while ((line = reader.readLine()) != null) sb.append(line).append('\n');
-                reader.close();
-                text = String(sb.toString());
+                var ce = '';
+                try { ce = String(conn.getContentEncoding() || ''); } catch (eCe) {}
+                var baos = new java.io.ByteArrayOutputStream();
+                var buf = java.lang.reflect.Array.newInstance(java.lang.Byte.TYPE, 4096);
+                var n;
+                while ((n = stream.read(buf)) != -1) baos.write(buf, 0, n);
+                stream.close();
+                var raw = baos.toByteArray();
+                var b0 = raw.length > 0 ? (raw[0] & 0xff) : 0;
+                var b1 = raw.length > 1 ? (raw[1] & 0xff) : 0;
+                if (/gzip/i.test(ce) || (b0 == 0x1f && b1 == 0x8b)) {
+                    var gis = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(raw));
+                    var baos2 = new java.io.ByteArrayOutputStream();
+                    while ((n = gis.read(buf)) != -1) baos2.write(buf, 0, n);
+                    gis.close();
+                    text = String(new java.lang.String(baos2.toByteArray(), 'UTF-8'));
+                } else {
+                    text = String(new java.lang.String(raw, 'UTF-8'));
+                }
             }
         } catch (eB) {}
         try { conn.disconnect(); } catch (eD) {}
 
+        if (code == 403) {
+            return { ok: false, msg: '提交被拒(403)会话失效，请点验证码刷新', cookie: newCok };
+        }
         if (code >= 300 && code < 400 && loc) {
             if (!/^https?:/i.test(loc)) loc = host + (loc.charAt(0) == '/' ? loc : '/' + loc);
             var gr = javaHttp('GET', loc, {
                 'User-Agent': MOBILE_UA,
                 'Cookie': newCok,
-                'Referer': checkUrl
+                'Referer': ref,
+                'Accept-Encoding': 'identity'
             }, null);
             newCok = mergeCookie(newCok, gr.cookie);
             if (isWelfareGate(gr.body)) return { ok: false, msg: '验证码错误', cookie: newCok };
@@ -727,30 +727,24 @@ function pushWelfareManual(d, key, site, pageUrl) {
             else if (/\/(vodtype|vodshow)\/124\b/.test(link)) nextPath = '/vodtype/124.html';
         }
     } catch (e0) {}
-    var cok = readWelfareCookie(site) || '';
-    // 直连明文验证页，避免 /index.php/welfare 或 zstd 脏数据导致拿不到 csrf
+    // 每次进验证页开新会话，避免旧 PHPSESSID 与新 csrf 错配 → 403
+    var cok = '';
     var gateUrl = welfareIndexUrl(host, nextPath);
-    var gate = welfareFetchGate(host, gateUrl, cok);
+    var gate = welfareFetchGate(host, gateUrl, '');
     cok = mergeCookie(cok, gate.cookie || '');
-    if (cok) writeWelfareCookie(site, cok);
+    try { cok = mergeCookie(cok, getCookie(host) || getCookie(host + '/') || ''); } catch (eGc) {}
     var html = gate.body || '';
     if (!isWelfareGate(html)) {
-        gate = welfareFetchGate(host, link, cok);
+        gate = welfareFetchGate(host, link, '');
         cok = mergeCookie(cok, gate.cookie || '');
-        if (cok) writeWelfareCookie(site, cok);
         html = gate.body || html;
     }
     var parsed = welfareParseGate(html);
     if (!parsed.next || parsed.next == '/') parsed.next = nextPath;
+    // 先落盘会话再拉图，提交时以文件为准；图片 Set-Cookie 故意不合并
+    if (cok) writeWelfareCookie(site, cok);
     var imgBag = welfareSaveCaptcha(host, cok, gateUrl);
-    var img = imgBag;
-    if (imgBag && typeof imgBag == 'object') {
-        img = imgBag.url || '';
-        if (imgBag.cookie) {
-            cok = mergeCookie(cok, imgBag.cookie);
-            writeWelfareCookie(site, cok);
-        }
-    }
+    var img = (imgBag && typeof imgBag == 'object') ? (imgBag.url || '') : (imgBag || '');
     try {
         putMyVar('amj_w_host', host);
         putMyVar('amj_w_csrf', parsed.csrf || '');
@@ -777,11 +771,15 @@ function pushWelfareManual(d, key, site, pageUrl) {
         }),
         col_type: 'pic_1_center'
     });
-    if (!parsed.csrf) {
-        d.push({ title: '未拿到验证页，点此重试', url: $('hiker://empty#noLoading#').lazyRule(() => {
-            refreshPage(false);
-            return 'toast://重试中';
-        }), col_type: 'text_center_1' });
+    if (!parsed.csrf || !hasPhpSession(cok)) {
+        d.push({
+            title: '未拿到验证会话，点此重试',
+            url: $('hiker://empty#noLoading#').lazyRule(() => {
+                refreshPage(false);
+                return 'toast://重试中';
+            }),
+            col_type: 'text_center_1'
+        });
         return;
     }
     d.push({
@@ -810,11 +808,21 @@ function pushWelfareManual(d, key, site, pageUrl) {
                     } catch (e1) {}
                     var site2 = getSite(k) || SITES.amj85;
                     if (!host) host = ((site2.flHost || site2.host) || '').replace(/\/$/, '');
+                    // 输入回调里 myVar 可能丢，优先读文件里的会话
                     var cok2 = '';
-                    try { cok2 = getMyVar('amj_w_cok', '') || readWelfareCookie(site2); } catch (e0) {
+                    try { cok2 = readWelfareCookie(site2) || getMyVar('amj_w_cok', '') || ''; } catch (e0) {
                         cok2 = readWelfareCookie(site2);
                     }
+                    try {
+                        if (!hasPhpSession(cok2)) {
+                            cok2 = mergeCookie(cok2, getCookie(host) || getCookie(host + '/') || '');
+                        }
+                    } catch (eGc2) {}
                     if (!csrf) return 'toast://验证已过期，请点验证码刷新后重试';
+                    if (!hasPhpSession(cok2)) {
+                        refreshPage(false);
+                        return 'toast://会话丢失，已刷新，请重新看图输入';
+                    }
                     var r = welfareCheckPost(host, csrf, nextPath, ans, cok2, page || (host + '/welfare/index.html'));
                     if (r.cookie) writeWelfareCookie(site2, r.cookie);
                     try { putMyVar('amj_w_cok', r.cookie || cok2 || ''); } catch (e2) {}
@@ -900,6 +908,38 @@ function mergeCookie(oldC, add) {
     return out.join('; ');
 }
 
+// 从连接头收集 Set-Cookie（部分安卓 getHeaderFields 会丢，再扫一遍 getHeaderFieldKey）
+function collectSetCookies(conn) {
+    var cok = '';
+    try {
+        var fields = conn.getHeaderFields();
+        if (fields) {
+            var keys = fields.keySet().toArray();
+            for (var i = 0; i < keys.length; i++) {
+                var key = keys[i] == null ? '' : String(keys[i]);
+                if (!/^set-cookie$/i.test(key)) continue;
+                var vals = fields.get(keys[i]);
+                if (!vals) continue;
+                for (var j = 0; j < vals.size(); j++) cok = mergeCookie(cok, String(vals.get(j)).split(';')[0]);
+            }
+        }
+    } catch (e0) {}
+    try {
+        for (var n = 0; n < 32; n++) {
+            var hk = conn.getHeaderFieldKey(n);
+            if (hk == null && n > 0) break;
+            if (hk && /^set-cookie$/i.test(String(hk))) {
+                cok = mergeCookie(cok, String(conn.getHeaderField(n) || '').split(';')[0]);
+            }
+        }
+    } catch (e1) {}
+    return cok;
+}
+
+function hasPhpSession(cok) {
+    return !!(cok && /PHPSESSID=/i.test(cok));
+}
+
 function readCookie(host, pageUrl) {
     var cok = '';
     try { cok = getCookie(host) || ''; } catch (e) {}
@@ -976,20 +1016,7 @@ function javaHttp(method, url, headers, body) {
             text = '';
         }
     }
-    var cok = '';
-    try {
-        var fields = conn.getHeaderFields();
-        if (fields) {
-            var keys = fields.keySet().toArray();
-            for (var i = 0; i < keys.length; i++) {
-                var key = keys[i] == null ? '' : String(keys[i]);
-                if (!/^set-cookie$/i.test(key)) continue;
-                var vals = fields.get(keys[i]);
-                if (!vals) continue;
-                for (var j = 0; j < vals.size(); j++) cok = mergeCookie(cok, String(vals.get(j)).split(';')[0]);
-            }
-        }
-    } catch (eH) {}
+    var cok = collectSetCookies(conn);
     try { conn.disconnect(); } catch (eD) {}
     return { body: text, cookie: cok, code: code };
 }
