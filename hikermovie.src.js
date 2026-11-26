@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime51';
+var RULE_VER = 'v22-anime52';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
@@ -140,7 +140,7 @@ function logErr(tag, e) {
 }
 
 function errItem(tag, e) {
-    return { title: '出错：' + tag + ' · ' + logErr(tag, e), url: 'hiker://empty', col_type: 'long_text' };
+    return { title: '出了点问题 · ' + logErr(tag, e), url: 'hiker://empty', col_type: 'long_text' };
 }
 
 function fillTpl(tpl, vars) {
@@ -362,9 +362,9 @@ function cleanHttpUrl(u) {
 function pushOmofunManual(d, host, ckName, pageUrl, col) {
     col = col || 'text_center_1';
     var link = cleanHttpUrl(pageUrl) || (host + '/');
-    d.push({ title: '① 打开网页并点「继续访问」', url: link, col_type: col });
+    d.push({ title: '① 打开网页，点「继续访问」', url: link, col_type: col });
     d.push({
-        title: '② 我已继续访问，重新搜索',
+        title: '② 完成后点这里刷新',
         url: $('hiker://empty#noLoading#').lazyRule((h, name, probe) => {
             eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
             var passed = omofunFetchPassed(h, probe, readCookie(h, probe) || '');
@@ -373,10 +373,10 @@ function pushOmofunManual(d, host, ckName, pageUrl, col) {
                 saveOmoCookie(passed.cookie);
             }
             if (isOmofunGate(passed.html)) {
-                return 'toast://仍未通过，请先完成①再点②';
+                return 'toast://还未通过，请先完成第①步';
             }
             refreshPage(false);
-            return 'hiker://empty';
+            return 'toast://已刷新';
         }, host, ckName || 'Omofun动漫', link),
         col_type: col
     });
@@ -717,8 +717,8 @@ function welfareCheckPost(host, csrf, nextPath, answer, cok, referer) {
             return encodeURIComponent(String(s));
         }
     };
-    if (!csrf) return { ok: false, msg: '缺少csrf，请刷新验证码', cookie: cok || '' };
-    if (!hasPhpSession(cok)) return { ok: false, msg: '会话丢失，请点验证码刷新', cookie: cok || '' };
+    if (!csrf) return { ok: false, msg: '验证码失效，请点图片刷新', cookie: cok || '' };
+    if (!hasPhpSession(cok)) return { ok: false, msg: '登录失效，请点图片刷新', cookie: cok || '' };
     var body = 'csrf=' + enc(csrf) + '&next=' + enc(nextPath || '/vodtype/124.html') + '&answer=' + enc(answer);
     try {
         var conn = new java.net.URL(checkUrl).openConnection();
@@ -783,7 +783,7 @@ function welfareCheckPost(host, csrf, nextPath, answer, cok, referer) {
         try { conn.disconnect(); } catch (eD) {}
 
         if (code == 403) {
-            return { ok: false, msg: '提交被拒(403)会话失效，请点验证码刷新', cookie: newCok };
+            return { ok: false, msg: '提交失败，请刷新验证码重试', cookie: newCok };
         }
         if (code >= 300 && code < 400 && loc) {
             if (!/^https?:/i.test(loc)) loc = host + (loc.charAt(0) == '/' ? loc : '/' + loc);
@@ -794,14 +794,14 @@ function welfareCheckPost(host, csrf, nextPath, answer, cok, referer) {
                 'Accept-Encoding': 'identity'
             }, null);
             newCok = mergeCookie(newCok, gr.cookie);
-            if (isWelfareGate(gr.body)) return { ok: false, msg: '验证码错误', cookie: newCok };
+            if (isWelfareGate(gr.body)) return { ok: false, msg: '验证码不正确', cookie: newCok };
             return { ok: true, cookie: newCok, html: gr.body || '' };
         }
-        if (isWelfareGate(text)) return { ok: false, msg: '验证码错误或已过期', cookie: newCok };
+        if (isWelfareGate(text)) return { ok: false, msg: '验证码不正确或已过期', cookie: newCok };
         if (code >= 200 && code < 400 && !isWelfareGate(text)) return { ok: true, cookie: newCok, html: text };
-        return { ok: false, msg: '提交失败(' + code + ')', cookie: newCok };
+        return { ok: false, msg: '提交失败，请稍后重试', cookie: newCok };
     } catch (e) {
-        return { ok: false, msg: '提交异常', cookie: cok || '' };
+        return { ok: false, msg: '网络异常，请稍后重试', cookie: cok || '' };
     }
 }
 
@@ -879,43 +879,43 @@ function pushWelfareManual(d, key, site, pageUrl) {
     } catch (eV) {}
 
     d.push({
-        title: '福利区验证 · 看图输入4位数字（勿打开原网页）',
+        title: '福利区需验证 · 看图输入 4 位数字',
         url: 'hiker://empty',
         col_type: 'text_center_1'
     });
     d.push({
-        title: '验证码（点此刷新）',
+        title: '点图片可刷新验证码',
         pic_url: img,
         url: $('hiker://empty#noLoading#').lazyRule(() => {
             eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
             refreshPage(false);
-            return 'toast://已刷新验证码';
+            return 'toast://已换一张';
         }),
         col_type: 'pic_1_center'
     });
     if (!parsed.csrf || !hasPhpSession(cok)) {
         d.push({
-            title: '未拿到验证会话，点此重试',
+            title: '验证码加载失败，点此重试',
             url: $('hiker://empty#noLoading#').lazyRule(() => {
                 refreshPage(false);
-                return 'toast://重试中';
+                return 'toast://正在重试';
             }),
             col_type: 'text_center_1'
         });
         return;
     }
     d.push({
-        title: '输入验证码并提交',
+        title: '输入验证码',
         // 参数只走 myVar，避免 input:// + $.toString(..., args) 把 csrf/url 填进输入框
         url: $('hiker://empty#noLoading#').lazyRule(() => {
             eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
             return 'input://' + JSON.stringify({
                 value: '',
-                hint: '请输入图片中的4位数字（1-9）',
+                hint: '图片中的 4 位数字（1-9）',
                 js: $.toString(() => {
                     eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                     var ans = String(input || '').replace(/\s+/g, '');
-                    if (!/^[1-9]{4}$/.test(ans)) return 'toast://请输入4位数字（1-9）';
+                    if (!/^[1-9]{4}$/.test(ans)) return 'toast://请输入 4 位数字（1-9）';
                     var host = '';
                     var k = 'amj85';
                     try {
@@ -936,10 +936,10 @@ function pushWelfareManual(d, key, site, pageUrl) {
                         if (!sess.next) nextPath = getMyVar('amj_w_next', '') || nextPath;
                         if (!hasPhpSession(cok2)) cok2 = getMyVar('amj_w_cok', '') || '';
                     } catch (e0) {}
-                    if (!csrf) return 'toast://验证已过期，请点验证码刷新后重试';
+                    if (!csrf) return 'toast://验证已过期，请点图片刷新后再试';
                     if (!hasPhpSession(cok2)) {
                         refreshPage(false);
-                        return 'toast://会话丢失，已刷新，请重新看图输入';
+                        return 'toast://登录失效，已刷新，请重新看图输入';
                     }
                     var r = welfareCheckPost(host, csrf, nextPath, ans, cok2, page || (host + '/welfare/index.html'));
                     writeWelfareSession(site2, {
@@ -951,10 +951,10 @@ function pushWelfareManual(d, key, site, pageUrl) {
                     try { putMyVar('amj_w_cok', r.cookie || cok2 || ''); } catch (e2) {}
                     if (!r.ok) {
                         refreshPage(false);
-                        return 'toast://' + (r.msg || '验证失败，请看新图重试');
+                        return 'toast://' + (r.msg || '验证失败，请看新图再试');
                     }
                     refreshPage(false);
-                    return 'toast://验证成功';
+                    return 'toast://验证通过';
                 })
             });
         }),
@@ -1269,13 +1269,13 @@ function tryUpdateFrom(bases, ver) {
             logs.push('err');
         }
     }
-    if (!best) return 'toast://更新失败 want≥' + minNeed + ' · ' + logs.join(' | ');
+    if (!best) return 'toast://暂时没有可用更新，请稍后再试';
     writeFile(dir + 'hikermovie.js', best.js);
     writeFile(dir + 'hikermovie.json', best.jn);
     var check = parseRuleVer(fetch(dir + 'hikermovie.js') || '');
-    if (animeNum(check) < best.num) return 'toast://写入校验失败';
+    if (animeNum(check) < best.num) return 'toast://更新未完成，请重试';
     refreshPage(false);
-    return 'toast://已更新 ' + best.ver + ' ←' + best.tag + ' (' + best.js.length + 'B)';
+    return 'toast://已更新到 ' + best.ver;
 }
 
 // ---------- 首页 ----------
@@ -1284,7 +1284,7 @@ function hikhmrule() {
     var d = res.data;
     try {
         d.push({
-            title: '引擎 ' + RULE_VER + ' · 点此更新',
+            title: '海阔世界 · ' + RULE_VER + ' · 轻触检查更新',
             url: $('#noLoading#').lazyRule((bases, ver) => {
                 eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 return tryUpdateFrom(bases, ver);
@@ -1293,7 +1293,7 @@ function hikhmrule() {
         });
         var kw = getMyVar('hksjsearchtext', '');
         d.push({
-            title: '搜索',
+            title: '搜片名 / 演员',
             // $.toString 回调在独立环境执行，必须把路径当参数传入，不能直接引用 RULE_JSON
             url: $.toString((jsonPath) => {
                 return $('hiker://empty#noRecordHistory#$$$' + jsonPath + '$$$' + input + '$$$fypage$$$').rule(() => {
@@ -1314,7 +1314,7 @@ function hikhmrule() {
             var group = groups[g] || {};
             var sites = group.list || [];
             if (group.type) {
-                d.push({ title: '—— ' + group.type + ' ——', url: 'hiker://empty', col_type: 'text_center_1' });
+                d.push({ title: '· ' + group.type + ' ·', url: 'hiker://empty', col_type: 'text_center_1' });
             }
             for (var i = 0; i < sites.length; i++) {
                 var s = sites[i];
@@ -1349,7 +1349,7 @@ function hikhmerj() {
         var vhref = parts[4] || '';
         var site = getSite(key);
         if (!site) {
-            d.push({ title: '未知站点: ' + key, col_type: 'text_center_1' });
+            d.push({ title: '站点不可用', col_type: 'text_center_1' });
             setHomeResult(res);
             return;
         }
@@ -1392,7 +1392,7 @@ function hikhmerj() {
         }
         if (!list.length) {
             d.push({
-                title: '暂无列表 · 可点上方分类重试 · html=' + ((html || '').length),
+                title: pn > 1 ? '没有更多了' : '暂时没有内容，点上方分类试试',
                 url: host + '/',
                 col_type: 'text_center_1'
             });
@@ -1423,7 +1423,7 @@ function clsrule(key, pageUrl) {
         }
         var site = getSite(key);
         if (!site) {
-            d.push({ title: '未知分类站点: ' + key, col_type: 'text_center_1' });
+            d.push({ title: '分类不可用', col_type: 'text_center_1' });
             setHomeResult(res);
             return;
         }
@@ -1485,7 +1485,7 @@ function clsrule(key, pageUrl) {
                 return;
             }
             d.push({
-                title: pn > 1 ? '没有更多了' : ('分类无数据 · html=' + ((html || '').length)),
+                title: pn > 1 ? '没有更多了' : '这一分类暂时没有内容',
                 url: target || host + '/',
                 col_type: 'text_center_1'
             });
@@ -1561,7 +1561,7 @@ function resolveMacCmsPlayUrl(host, data, cookie, referer) {
         var resolved = amjResolvePlayToken(host, url, cookie, referer);
         if (resolved.cookie) writeWelfareCookie(SITES.amj85, resolved.cookie);
         if (resolved.ok && resolved.url) return resolved.url + '#isVideo=true#';
-        return 'toast://' + (resolved.msg || '播放换链失败');
+        return 'toast://' + (resolved.msg || '暂时无法播放，请换线路');
     }
     url = decodeMacPlayerUrl(url, enc);
     if (url && /^https?:/i.test(url)) return url + '#isVideo=true#';
@@ -1571,7 +1571,7 @@ function resolveMacCmsPlayUrl(host, data, cookie, referer) {
 // 爱美剧 encrypt=4：POST /amj-play.php 用 token 换真实播放地址
 function amjResolvePlayToken(host, token, cookie, referer) {
     host = (host || '').replace(/\/$/, '');
-    if (!host || !token) return { ok: false, msg: '缺少播放凭据' };
+    if (!host || !token) return { ok: false, msg: '播放地址无效' };
     var body = '';
     try {
         body = 'token=' + String(java.net.URLEncoder.encode(String(token), 'UTF-8'));
@@ -1597,16 +1597,16 @@ function amjResolvePlayToken(host, token, cookie, referer) {
             return { ok: true, url: j.url, type: j.type || '', cookie: cookie };
         }
         if (j && j.error == 'captcha_required') {
-            return { ok: false, msg: '播放需验证码，请稍后重试或换线路', cookie: cookie, captcha: true };
+            return { ok: false, msg: '播放需验证，请稍后重试或换线路', cookie: cookie, captcha: true };
         }
         if (j && (j.error == 'expired_or_invalid' || /过期/.test(j.message || ''))) {
-            return { ok: false, msg: '播放凭据过期，请返回重进', cookie: cookie };
+            return { ok: false, msg: '播放已过期，请返回重进', cookie: cookie };
         }
         if (j && j.message) return { ok: false, msg: j.message, cookie: cookie };
-        if (jr && jr.code == 410) return { ok: false, msg: '播放凭据过期，请返回重进', cookie: cookie };
-        return { ok: false, msg: '换链失败(' + ((jr && jr.code) || '?') + ')', cookie: cookie };
+        if (jr && jr.code == 410) return { ok: false, msg: '播放已过期，请返回重进', cookie: cookie };
+        return { ok: false, msg: '暂时无法播放，请换线路', cookie: cookie };
     } catch (e) {
-        return { ok: false, msg: '换链异常', cookie: cookie || '' };
+        return { ok: false, msg: '网络异常，请稍后重试', cookie: cookie || '' };
     }
 }
 
@@ -1621,7 +1621,7 @@ function omerj(movTitle, detailUrl) {
         try { refreshX5WebView(''); } catch (e) {}
 
         d.push({
-            title: '搜索「' + movTitle + '」',
+            title: '全网搜「' + movTitle + '」',
             url: $('hiker://empty#noHistory#$$$' + RULE_JSON + '$$$' + movTitle + '$$$fypage$$$').rule(() => {
                 eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 hiksearch();
@@ -1706,7 +1706,7 @@ function omerj(movTitle, detailUrl) {
                 try { tabName = pdfh(tabs[i], 'a&&Text||body&&Text') || tabName; } catch (e) {}
             }
             d.push({
-                title: tabName + ' · ' + list.length + ' 集',
+                title: tabName + '（' + list.length + '）',
                 url: 'hiker://empty',
                 col_type: 'text_1'
             });
@@ -1751,10 +1751,10 @@ function omerj(movTitle, detailUrl) {
                 plays.push({ link: hrefP, title: tt || ('线路' + plays.length) });
             }
             if (plays.length) {
-                d.push({ title: '播放列表 · ' + plays.length, url: 'hiker://empty', col_type: 'text_1' });
+                d.push({ title: '选集 · ' + plays.length, url: 'hiker://empty', col_type: 'text_1' });
                 for (var pi = 0; pi < plays.length; pi++) {
                     d.push({
-                        title: plays[pi].title || ('播放' + (pi + 1)),
+                        title: plays[pi].title || ('第' + (pi + 1) + '集'),
                         url: playLazy(host, plays[pi].link, plays[pi].title || movTitle, site.play),
                         col_type: plays.length <= 4 ? 'text_2' : 'flex_button',
                         extra: { id: host + '#' + plays[pi].link, referer: host }
@@ -1765,8 +1765,8 @@ function omerj(movTitle, detailUrl) {
         }
         if (!ep) {
             d.push({
-                title: '未解析到选集',
-                url: 'toast://无选集，请换线路或反馈',
+                title: '暂时没有可播放选集',
+                url: 'toast://请换一个站点再试',
                 col_type: 'text_center_1'
             });
         }
@@ -1785,7 +1785,7 @@ function omlazy() {
     var src = parts[1] || '';
     var playType = parts[3] || '';
     try {
-        if (!src) return 'toast://无播放地址';
+        if (!src) return 'toast://没有播放地址';
         if (/\/share\//.test(src)) {
             var link = src.split('/share')[0];
             var fc = fetch(src, {}).replace('var purl', 'var main');
@@ -1831,7 +1831,7 @@ function omlazy() {
             } catch (ePj) {}
         }
         if (!html || html.length < 400) html = fetchPage(src, host, playCok) || html;
-        if (isWelfareGate(html)) return 'toast://播放页需验证，请返回福利分类重新验证';
+        if (isWelfareGate(html)) return 'toast://需要先完成福利区验证';
 
         // 爱美剧 #amj-player-data（encrypt=4 走 /amj-play.php 换链）
         var amjData = isAmj ? extractAmjPlayerData(html) : null;
@@ -1862,7 +1862,7 @@ function omlazy() {
             var urls = _getUrls();
             if (window.__n == null) window.__n = 0;
             window.__n++;
-            if (window.__n > 20) return 'toast://嗅探超时';
+            if (window.__n > 20) return 'toast://解析超时，请换线路';
             for (var i = 0; i < urls.length; i++) {
                 if (/\.m3u8|\.mp4|video_mp4|type=m3u8|\/video\/tos\//i.test(urls[i]) &&
                     !/\.html|ac=dm|=http|\?url=\/m3u8/i.test(urls[i])) {
@@ -1877,7 +1877,7 @@ function omlazy() {
     } catch (e) {
         logErr('play', e);
         // 禁止 return 播放页 http：会变成「跳转原站」
-        return 'toast://播放解析失败';
+        return 'toast://播放失败，请换线路';
     }
 }
 
@@ -1890,8 +1890,8 @@ function hiksearch() {
         var jsonPath = parts[1] || RULE_JSON;
         var wd = parts[2] || '';
         d.push({
-            title: '搜索「' + wd + '」· 点下方站点',
-            url: 'toast://请点下方站点进入',
+            title: '搜「' + wd + '」· 选择站点',
+            url: 'toast://点下面的站点开始搜索',
             col_type: 'text_center_1'
         });
         var sites = loadJsonSites();
@@ -1916,7 +1916,7 @@ function hiksearch() {
         }
         // 聚合改为二级页 .rule()，避免搜索页 lazyRule 空链接
         d.push({
-            title: '开始聚合搜索',
+            title: '一次搜全部站点',
             url: $('hiker://empty#noRecordHistory#noLoading#').rule((sitesJson, keyWd) => {
                 eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 hikAggSearch(sitesJson, keyWd);
@@ -1935,7 +1935,7 @@ function hikAggSearch(sitesJson, wd) {
     var d = res.data;
     try {
         wd = wd || '';
-        d.push({ title: '聚合「' + wd + '」', col_type: 'text_center_1' });
+        d.push({ title: '正在搜「' + wd + '」', col_type: 'text_center_1' });
         var sites = [];
         try { sites = JSON.parse(sitesJson || '[]'); } catch (e) { sites = []; }
         if (!sites.length) sites = defaultSiteList();
@@ -1962,16 +1962,16 @@ function hikAggSearch(sitesJson, wd) {
                     html = fetchPage(url, site.host, cookie);
                 }
                 if (site.needCookie && isOmofunGate(html)) {
-                    d.push({ title: s.title + ' · 访问频繁，请按下面两步操作', url: 'hiker://empty', col_type: 'text_1' });
+                    d.push({ title: s.title + ' · 访问较频繁', url: 'hiker://empty', col_type: 'text_1' });
                     pushOmofunManual(d, site.host, s.title, url, 'text_1');
                     continue;
                 }
                 var list = parseList(html, site, site.host);
                 if (!list.length) {
-                    d.push({ title: s.title + ' · 无结果', url: url, col_type: 'text_1' });
+                    d.push({ title: s.title + ' · 没有结果', url: url, col_type: 'text_1' });
                     continue;
                 }
-                d.push({ title: '—— ' + s.title + ' · ' + list.length + ' ——', url: 'hiker://empty', col_type: 'text_1' });
+                d.push({ title: '· ' + s.title + ' · ' + list.length + ' 条', url: 'hiker://empty', col_type: 'text_1' });
                 for (var j = 0; j < list.length; j++) {
                     var v = list[j];
                     d.push({
@@ -1990,7 +1990,7 @@ function hikAggSearch(sitesJson, wd) {
                 d.push({ title: (sites[i] && sites[i].title ? sites[i].title : '站点') + ' · 请求失败', url: 'hiker://empty', col_type: 'text_1' });
             }
         }
-        if (!hit) d.push({ title: '没有搜到内容', url: 'hiker://empty', col_type: 'text_center_1' });
+        if (!hit) d.push({ title: '没有搜到相关内容', url: 'hiker://empty', col_type: 'text_center_1' });
     } catch (e) {
         d.push(errItem('agg', e));
     }
@@ -2016,7 +2016,7 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
         }
         var site = getSite(key) || resolveSiteByHost('', searchUrl || '');
         if (!site) {
-            d.push({ title: '未知搜索站点: ' + key, col_type: 'text_center_1' });
+            d.push({ title: '搜索站点不可用', col_type: 'text_center_1' });
             setHomeResult(res);
             return;
         }
@@ -2048,8 +2048,8 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
         }
         if (site.needCookie && isOmofunGate(html)) {
             d.push({
-                title: '访问较频繁，请按下面两步操作',
-                url: 'toast://先点①，网页里点继续访问，再点②',
+                title: '访问较频繁，按下面两步继续',
+                url: 'toast://先完成①，再点②刷新',
                 col_type: 'text_center_1'
             });
             pushOmofunManual(d, host, cktitle || site.title, pageUrl, 'text_center_1');

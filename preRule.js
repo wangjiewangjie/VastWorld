@@ -1,7 +1,7 @@
 ﻿var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/hksj/";
-var RULE_VER = "v22-anime51";
+var RULE_VER = "v22-anime52";
 var RULE_JS_MAX = 70000;
 
 // ½ûÓÃ jsDelivr @main£¬±ÜÃâ CDN »º´æ¾É¹æÔò
@@ -191,7 +191,7 @@ function installUpdateStub() {
     setHomeResult({
       data: [
         {
-          title: "±¾µØ¹æÔòÎ´¾ÍÐ÷£¬µã´Ë¸üÐÂµ½ " + RULE_VER,
+          title: "本地规则未就绪，点此更新到 " + RULE_VER,
           url: buildUpdateItem().url,
           col_type: "text_center_1",
         },
