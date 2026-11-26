@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime44';
+var RULE_VER = 'v22-anime45';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 // 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
 var RULE_COMPAT = 'v22-anime27';
@@ -743,35 +743,47 @@ function pushWelfareManual(d, key, site, pageUrl) {
     }
     d.push({
         title: '输入验证码并提交',
-        url: $('hiker://empty#noLoading#').lazyRule((host, csrf, nextPath, page, k) => {
+        // 参数只走 myVar，避免 input:// + $.toString(..., args) 把 csrf/url 填进输入框
+        url: $('hiker://empty#noLoading#').lazyRule(() => {
             eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
-            return 'input://请输入图片中的4位数字￥￥' + $.toString((host, csrf, nextPath, page, k) => {
-                eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
-                var ans = String(input || '').replace(/\s+/g, '');
-                if (!/^[1-9]{4}$/.test(ans)) return 'toast://请输入4位数字（1-9）';
-                var site2 = getSite(k) || SITES.amj85;
-                var cok2 = '';
-                try { cok2 = getMyVar('amj_w_cok', '') || readWelfareCookie(site2); } catch (e0) {
-                    cok2 = readWelfareCookie(site2);
-                }
-                // csrf 可能已刷新，优先 myVar
-                try {
-                    var c2 = getMyVar('amj_w_csrf', '');
-                    if (c2) csrf = c2;
-                    var h2 = getMyVar('amj_w_host', '');
-                    if (h2) host = h2;
-                } catch (e1) {}
-                var r = welfareCheckPost(host, csrf, nextPath, ans, cok2, page);
-                if (r.cookie) writeWelfareCookie(site2, r.cookie);
-                try { putMyVar('amj_w_cok', r.cookie || cok2 || ''); } catch (e2) {}
-                if (!r.ok) {
+            return 'input://' + JSON.stringify({
+                value: '',
+                hint: '请输入图片中的4位数字（1-9）',
+                js: $.toString(() => {
+                    eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
+                    var ans = String(input || '').replace(/\s+/g, '');
+                    if (!/^[1-9]{4}$/.test(ans)) return 'toast://请输入4位数字（1-9）';
+                    var host = '';
+                    var csrf = '';
+                    var nextPath = '/vodtype/124.html';
+                    var page = '';
+                    var k = 'amj85';
+                    try {
+                        host = getMyVar('amj_w_host', '') || '';
+                        csrf = getMyVar('amj_w_csrf', '') || '';
+                        nextPath = getMyVar('amj_w_next', '') || nextPath;
+                        page = getMyVar('amj_w_page', '') || '';
+                        k = getMyVar('amj_w_key', '') || k;
+                    } catch (e1) {}
+                    var site2 = getSite(k) || SITES.amj85;
+                    if (!host) host = ((site2.flHost || site2.host) || '').replace(/\/$/, '');
+                    var cok2 = '';
+                    try { cok2 = getMyVar('amj_w_cok', '') || readWelfareCookie(site2); } catch (e0) {
+                        cok2 = readWelfareCookie(site2);
+                    }
+                    if (!csrf) return 'toast://验证已过期，请点验证码刷新后重试';
+                    var r = welfareCheckPost(host, csrf, nextPath, ans, cok2, page || (host + '/welfare/index.html'));
+                    if (r.cookie) writeWelfareCookie(site2, r.cookie);
+                    try { putMyVar('amj_w_cok', r.cookie || cok2 || ''); } catch (e2) {}
+                    if (!r.ok) {
+                        refreshPage(false);
+                        return 'toast://' + (r.msg || '验证失败，请看新图重试');
+                    }
                     refreshPage(false);
-                    return 'toast://' + (r.msg || '验证失败，请看新图重试');
-                }
-                refreshPage(false);
-                return 'toast://验证成功';
-            }, host, csrf, nextPath, page, k);
-        }, host, parsed.csrf, parsed.next, link, key || 'amj85'),
+                    return 'toast://验证成功';
+                })
+            });
+        }),
         col_type: 'text_center_1'
     });
 }
