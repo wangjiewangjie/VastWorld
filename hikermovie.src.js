@@ -1,6 +1,6 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime53';
+var RULE_VER = 'v22-anime54';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
@@ -14,13 +14,9 @@ var RULE_BASES = [
 var COOKIE_DIR = 'hiker://files/rules/hksj/hksjcookie/';
 var SITE_ICO = 'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3';
 
-// 黑橙主题：橙强调；黑底跟随海阔深色模式
-var THEME_ORANGE = '#FF6A00';
+// 黑橙主题：仅用海阔中文引号上色（text_1 / text_center_1）；按钮/input 不支持 HTML
 function themeOrange(s) {
     return '\u2018\u2018' + String(s == null ? '' : s) + '\u2019\u2019';
-}
-function themeHtml(s) {
-    return '<font color="' + THEME_ORANGE + '"><b>' + String(s == null ? '' : s) + '</b></font>';
 }
 
 
@@ -1303,7 +1299,7 @@ function hikhmrule() {
         });
         var kw = getMyVar('hksjsearchtext', '');
         d.push({
-            title: themeHtml('搜'),
+            title: '搜索',
             // $.toString 回调在独立环境执行，必须把路径当参数传入，不能直接引用 RULE_JSON
             url: $.toString((jsonPath) => {
                 return $('hiker://empty#noRecordHistory#$$$' + jsonPath + '$$$' + input + '$$$fypage$$$').rule(() => {
@@ -1371,7 +1367,7 @@ function hikhmerj() {
                 if (!types[i] || !ids[i]) continue;
                 // MY_URL 必须带 fypage，上滑才会替换成 2/3…；不能把第1页死链写进闭包
                 d.push({
-                    title: themeHtml(types[i]),
+                    title: types[i],
                     url: $('hiker://empty#noRecordHistory#$$cls$$' + key + '$$' + ids[i] + '$$fypage').rule(() => {
                         eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                         clsrule();
@@ -1631,7 +1627,7 @@ function omerj(movTitle, detailUrl) {
         try { refreshX5WebView(''); } catch (e) {}
 
         d.push({
-            title: themeHtml('全网搜「' + movTitle + '」'),
+            title: '全网搜「' + movTitle + '」',
             url: $('hiker://empty#noHistory#$$$' + RULE_JSON + '$$$' + movTitle + '$$$fypage$$$').rule(() => {
                 eval(fetch('hiker://files/rules/hksj/hikermovie.js'));
                 hiksearch();
@@ -1734,7 +1730,7 @@ function omerj(movTitle, detailUrl) {
                     if (t && t.match(/(第|\d|-)*(集|话|期)/g)) t = t.replace(/第|集|话|期/g, '');
                 } catch (e) {}
                 d.push({
-                    title: themeHtml(t || ('第' + (j + 1))),
+                    title: t || ('第' + (j + 1)),
                     url: playLazy(host, link, t || movTitle, site.play),
                     col_type: list.length <= 4 ? 'text_2' : (isNaN(t) ? 'flex_button' : 'text_5'),
                     extra: {
@@ -1764,7 +1760,7 @@ function omerj(movTitle, detailUrl) {
                 d.push({ title: themeOrange('选集 · ' + plays.length), url: 'hiker://empty', col_type: 'text_1' });
                 for (var pi = 0; pi < plays.length; pi++) {
                     d.push({
-                        title: themeHtml(plays[pi].title || ('第' + (pi + 1) + '集')),
+                        title: plays[pi].title || ('第' + (pi + 1) + '集'),
                         url: playLazy(host, plays[pi].link, plays[pi].title || movTitle, site.play),
                         col_type: plays.length <= 4 ? 'text_2' : 'flex_button',
                         extra: { id: host + '#' + plays[pi].link, referer: host }
@@ -1985,7 +1981,7 @@ function hikAggSearch(sitesJson, wd) {
                 for (var j = 0; j < list.length; j++) {
                     var v = list[j];
                     d.push({
-                        title: (wd ? v.title.replace(wd, themeOrange(wd)) : v.title),
+                        title: (wd ? v.title.replace(wd, '「' + wd + '」') : v.title),
                         desc: v.desc || '',
                         pic_url: v.img ? imgUrl(v.img, site.host) : '',
                         url: $('hiker://empty#noHistory#').rule((name, detailUrl) => {
