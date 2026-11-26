@@ -1,9 +1,7 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime49';
+var RULE_VER = 'v22-anime50';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
-// 仅作旧预加载兼容标记，更新校验以 parseRuleVer 为准，避免注释里的旧版号把 CDN 老包写回
-var RULE_COMPAT = 'v22-anime27';
 var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
@@ -124,7 +122,8 @@ var SITES = {
         list: 'body&&.film-card||body&&.module-items&&.film-card',
         img: 'img&&src||img&&data-src||img&&data-original',
         title: 'h3&&a&&Text||a&&title||img&&alt||a&&Text',
-        desc: '.film-state&&Text||p&&Text||span&&Text',
+        // 评分/年份优先，便于列表本地排序
+        desc: '.film-score&&Text||p&&Text||.film-state&&Text||span&&Text',
         url: 'a&&href',
         tabs: 'body&&.amj-source-option||body&&[data-detail-source]',
         conts: 'body&&[data-pk-source-panel]||body&&.module-play-list-content',
@@ -391,21 +390,56 @@ function isDetailHref(full) {
     return true;
 }
 
+function itemYear(v) {
+    var s = ((v && v.desc) || '') + ' ' + ((v && v.title) || '');
+    var years = s.match(/(?:19|20)\d{2}/g);
+    if (!years || !years.length) return 0;
+    var best = 0;
+    for (var i = 0; i < years.length; i++) {
+        var y = parseInt(years[i], 10);
+        if (y >= 1900 && y <= 2035 && y > best) best = y;
+    }
+    return best;
+}
+
+function itemScore(v) {
+    var s = String((v && v.desc) || '');
+    var m = s.match(/(?:评分|豆瓣|score)[^\d]{0,8}(\d(?:\.\d)?)/i) ||
+        s.match(/(?:^|[^\d])(\d\.\d)(?:[^\d]|$)/);
+    if (!m) return 0;
+    var n = parseFloat(m[1]);
+    return (n >= 0 && n <= 10) ? n : 0;
+}
+
+// 当前页优先：年份新 → 评分高（站点多数无稳定的服务端排序参数）
+function sortListByYearScore(list) {
+    if (!list || list.length < 2) return list || [];
+    return list.slice().sort(function (a, b) {
+        var ya = itemYear(a), yb = itemYear(b);
+        if (yb !== ya) return yb - ya;
+        var sa = itemScore(a), sb = itemScore(b);
+        if (sb !== sa) return sb - sa;
+        return 0;
+    });
+}
+
 function parseListFallback(html, host) {
     var out = [];
     var seen = {};
     if (!html) return out;
     var m;
-    // Omofun 新卡片：lazyload a 上同时有 href/title/data-original
-    var reOmo = /<a\b[^>]*class="[^"]*lazyload[^"]*"[^>]*href="([^"]*\/anime\/[^"]+)"[^>]*title="([^"]*)"[^>]*data-original="([^"]*)"/gi;
+    // Omofun 新卡片：lazyload a 上同时有 href/title/data-original；邻近文本常含年份
+    var reOmo = /<a\b[^>]*class="[^"]*lazyload[^"]*"[^>]*href="([^"]*\/anime\/[^"]+)"[^>]*title="([^"]*)"[^>]*data-original="([^"]*)"[^>]*>[\s\S]{0,280}/gi;
     while ((m = reOmo.exec(html)) && out.length < 60) {
         var full0 = absUrl(m[1], host);
         var t0 = (m[2] || '').replace(/^\s+|\s+$/g, '');
         if (!full0 || !t0 || seen[full0] || !isDetailHref(full0)) continue;
         seen[full0] = 1;
-        out.push({ title: t0, img: absUrl(m[3], host), desc: '', url: full0 });
+        var near = String(m[0] || '').replace(/<[^>]+>/g, ' ');
+        var y0 = (near.match(/(?:19|20)\d{2}/) || [])[0] || '';
+        out.push({ title: t0, img: absUrl(m[3], host), desc: y0, url: full0 });
     }
-    if (out.length) return out;
+    if (out.length) return sortListByYearScore(out);
     // title 在前 / href 在前 两种 <a>
     var re = /<a\b[^>]*?(?:title="([^"]+)"[^>]*?href="([^"]+)"|href="([^"]+)"[^>]*?title="([^"]+)")[^>]*>/gi;
     while ((m = re.exec(html)) && out.length < 60) {
@@ -421,18 +455,30 @@ function parseListFallback(html, host) {
         seen[full] = 1;
         out.push({ title: title, img: '', desc: '', url: full });
     }
-    // 爱美剧 film-card：title 在 h3，href 在 poster-link
+    // 爱美剧 film-card：title 在 h3；附带评分/年份
     if (!out.length) {
-        var re2 = /<article[^>]*class="[^"]*film-card[\s\S]*?href="(\/voddetail\/[^"]+)"[\s\S]*?<h3>\s*<a[^>]*>([^<]+)</gi;
+        var re2 = /<article[^>]*class="[^"]*film-card[\s\S]*?href="(\/voddetail\/[^"]+)"[\s\S]*?(?:film-score[^>]*>([^<]*)<)?[\s\S]*?<h3>\s*<a[^>]*>([^<]+)<[\s\S]*?<p>([^<]*)</gi;
         while ((m = re2.exec(html)) && out.length < 60) {
             var full2 = absUrl(m[1], host);
-            var t2 = (m[2] || '').replace(/^\s+|\s+$/g, '');
+            var t2 = (m[3] || '').replace(/^\s+|\s+$/g, '');
             if (!full2 || !t2 || seen[full2]) continue;
             seen[full2] = 1;
-            out.push({ title: t2, img: '', desc: '', url: full2 });
+            var sc = (m[2] || '').replace(/^\s+|\s+$/g, '');
+            var yr = (m[4] || '').replace(/^\s+|\s+$/g, '');
+            out.push({ title: t2, img: '', desc: (sc ? sc + ' ' : '') + yr, url: full2 });
+        }
+        if (!out.length) {
+            var re3 = /<article[^>]*class="[^"]*film-card[\s\S]*?href="(\/voddetail\/[^"]+)"[\s\S]*?<h3>\s*<a[^>]*>([^<]+)</gi;
+            while ((m = re3.exec(html)) && out.length < 60) {
+                var full3 = absUrl(m[1], host);
+                var t3 = (m[2] || '').replace(/^\s+|\s+$/g, '');
+                if (!full3 || !t3 || seen[full3]) continue;
+                seen[full3] = 1;
+                out.push({ title: t3, img: '', desc: '', url: full3 });
+            }
         }
     }
-    return out;
+    return sortListByYearScore(out);
 }
 
 function parseList(html, site, host) {
@@ -451,16 +497,24 @@ function parseList(html, site, host) {
         if (!full || !/^https?:/i.test(full) || seen[full]) continue;
         if (!isDetailHref(full)) continue;
         seen[full] = 1;
+        // 卡片内再扫一遍年份/评分，desc 常只有「更新/BD」
+        var extra = '';
+        try {
+            var blob = String(items[i] || '').replace(/<[^>]+>/g, ' ');
+            var y = (blob.match(/(?:19|20)\d{2}/) || [])[0] || '';
+            var sc = (blob.match(/(?:评分|豆瓣|score)[^\d]{0,6}(\d(?:\.\d)?)/i) || blob.match(/(?:^|[^\d])(\d\.\d)(?:[^\d]|$)/) || [])[1] || '';
+            if (y || sc) extra = (sc ? sc + ' ' : '') + y;
+        } catch (eX) {}
         out.push({
             title: title,
             img: absUrl(img, host),
-            desc: desc,
+            desc: extra || desc || '',
             url: full
         });
         if (out.length >= 60) break;
     }
     if (!out.length) out = parseListFallback(html, host);
-    return out;
+    return sortListByYearScore(out);
 }
 
 function pushCards(d, list, host, col) {
@@ -1440,19 +1494,15 @@ function playLazy(host, link, title, playType) {
     });
 }
 
-function extractPlayerAaaa(html) {
-    if (!html) return '';
-    // 爱美剧：优先读 #amj-player-data，避免命中后面的 {vod_data:{}} 空壳
-    var amj = extractAmjPlayerData(html);
-    if (amj && amj.url) {
-        try { return JSON.stringify(amj); } catch (e0) {}
-    }
-    var i = html.indexOf('player_aaaa');
+function extractJsonObjectAfter(html, needle, maxLen) {
+    if (!html || !needle) return '';
+    var i = html.indexOf(needle);
     if (i < 0) return '';
     var start = html.indexOf('{', i);
     if (start < 0) return '';
+    var limit = maxLen || 8000;
     var depth = 0;
-    for (var p = start; p < html.length && p < start + 8000; p++) {
+    for (var p = start; p < html.length && p < start + limit; p++) {
         var ch = html.charAt(p);
         if (ch === '{') depth++;
         else if (ch === '}') {
@@ -1463,14 +1513,45 @@ function extractPlayerAaaa(html) {
     return '';
 }
 
+function extractPlayerAaaa(html) {
+    // 跳过爱美剧空壳 window.player_aaaa = ... || {vod_data:{}}
+    return extractJsonObjectAfter(html, 'var player_aaaa', 8000) ||
+        extractJsonObjectAfter(html, 'player_aaaa=', 8000);
+}
+
 function extractAmjPlayerData(html) {
     if (!html) return null;
     try {
-        var m = html.match(/id=["']amj-player-data["'][^>]*>(\{[\s\S]*?\})<\/script>/i) ||
-            html.match(/<script[^>]*id=["']amj-player-data["'][^>]*>(\{[\s\S]*?\})<\/script>/i);
-        if (m && m[1]) return JSON.parse(m[1]);
+        var raw = extractJsonObjectAfter(html, 'amj-player-data', 12000);
+        return raw ? JSON.parse(raw) : null;
     } catch (e) {}
     return null;
+}
+
+function decodeMacPlayerUrl(url, encrypt) {
+    url = url || '';
+    var enc = Number(encrypt || 0);
+    if (enc === 1) return unescape(url);
+    if (enc === 2) {
+        try { return unescape(base64Decode(url)); } catch (e) { return url; }
+    }
+    return url;
+}
+
+// 统一处理 MacCMS / 爱美剧播放对象；成功返回 "url#isVideo=true#"，失败 toast 或空串
+function resolveMacCmsPlayUrl(host, data, cookie, referer) {
+    if (!data || !data.url) return '';
+    var enc = Number(data.encrypt || 0);
+    var url = data.url || '';
+    if (enc === 4 || (url && !/^https?:/i.test(url) && enc > 2)) {
+        var resolved = amjResolvePlayToken(host, url, cookie, referer);
+        if (resolved.cookie) writeWelfareCookie(SITES.amj85, resolved.cookie);
+        if (resolved.ok && resolved.url) return resolved.url + '#isVideo=true#';
+        return 'toast://' + (resolved.msg || '播放换链失败');
+    }
+    url = decodeMacPlayerUrl(url, enc);
+    if (url && /^https?:/i.test(url)) return url + '#isVideo=true#';
+    return '';
 }
 
 // 爱美剧 encrypt=4：POST /amj-play.php 用 token 换真实播放地址
@@ -1738,49 +1819,25 @@ function omlazy() {
         if (!html || html.length < 400) html = fetchPage(src, host, playCok) || html;
         if (isWelfareGate(html)) return 'toast://播放页需验证，请返回福利分类重新验证';
 
-        // 爱美剧 #amj-player-data（encrypt=4 需服务端换链）
+        // 爱美剧 #amj-player-data（encrypt=4 走 /amj-play.php 换链）
         var amjData = isAmj ? extractAmjPlayerData(html) : null;
         if (amjData && amjData.url) {
-            var enc = Number(amjData.encrypt || 0);
-            var uAmj = amjData.url || '';
-            if (enc === 4 || (!/^https?:/i.test(uAmj) && enc > 2)) {
-                var resolved = amjResolvePlayToken(host, uAmj, playCok, src);
-                if (resolved.cookie) {
-                    playCok = resolved.cookie;
-                    writeWelfareCookie(SITES.amj85, playCok);
-                }
-                if (resolved.ok && resolved.url) return resolved.url + '#isVideo=true#';
-                return 'toast://' + (resolved.msg || '播放换链失败');
-            }
-            if (enc === 1) uAmj = unescape(uAmj);
-            else if (enc === 2) uAmj = unescape(base64Decode(uAmj));
-            if (uAmj && /^https?:/i.test(uAmj)) return uAmj + '#isVideo=true#';
+            var playUrl = resolveMacCmsPlayUrl(host, amjData, playCok, src);
+            if (playUrl) return playUrl;
         }
 
-        // MacCMS player_aaaa：用括号计数，避免 vod_data 嵌套截断
+        // 其它站 MacCMS player_aaaa
         var aaaaJson = extractPlayerAaaa(html);
-        if (!aaaaJson) {
-            var m0 = html.match(/var\s+player_aaaa\s*=\s*(\{[\s\S]*?\});/);
-            if (m0) aaaaJson = m0[1];
-        }
         if (aaaaJson || playType == 'aaaa') {
             if (aaaaJson) {
                 eval('var player_aaaa=' + aaaaJson);
-                var url = player_aaaa.url || '';
-                var enc2 = Number(player_aaaa.encrypt || 0);
-                if (enc2 === 4 || (url && !/^https?:/i.test(url) && enc2 > 2)) {
-                    var r2 = amjResolvePlayToken(host, url, playCok, src);
-                    if (r2.cookie) writeWelfareCookie(SITES.amj85, r2.cookie);
-                    if (r2.ok && r2.url) return r2.url + '#isVideo=true#';
-                    return 'toast://' + (r2.msg || '播放换链失败');
-                }
-                if (player_aaaa.encrypt == '1' || player_aaaa.encrypt == 1) url = unescape(url);
-                else if (player_aaaa.encrypt == '2' || player_aaaa.encrypt == 2) url = unescape(base64Decode(url));
-                if (url && /^https?:/i.test(url)) return url + '#isVideo=true#';
+                var playUrl2 = resolveMacCmsPlayUrl(host, player_aaaa, playCok, src);
+                if (playUrl2) return playUrl2;
             }
-            // 直抽 url 字段兜底
             var um = html.match(/"url"\s*:\s*"(https?:[^"]+)"/);
-            if (um && /m3u8|\.mp4|obj\/tos/i.test(um[1])) return um[1].replace(/\\u002F/g, '/').replace(/\\\//g, '/') + '#isVideo=true#';
+            if (um && /m3u8|\.mp4|obj\/tos/i.test(um[1])) {
+                return um[1].replace(/\\u002F/g, '/').replace(/\\\//g, '/') + '#isVideo=true#';
+            }
         }
         // 页面内 m3u8
         var mm = html.match(/https?:\/\/[^\"\'\s<>]+\.m3u8[^\"\'\s<>]*/);
