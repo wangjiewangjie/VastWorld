@@ -1,7 +1,7 @@
 ﻿var RULE_JS_NAME = "hikermovie.js";
 var RULE_JSON_NAME = "hikermovie.json";
 var RULE_DIR = "hiker://files/rules/hksj/";
-var RULE_VER = "v22-anime54";
+var RULE_VER = "v22-anime55";
 var RULE_JS_MAX = 70000;
 
 // ½ûÓÃ jsDelivr @main£¬±ÜÃâ CDN »º´æ¾É¹æÔò
@@ -19,7 +19,7 @@ var FETCH_OPT = {
     "Cache-Control": "no-cache",
     Pragma: "no-cache",
   },
-  timeout: 20000,
+  timeout: 8000,
 };
 
 function fetchRule(url, check) {
@@ -80,6 +80,7 @@ function uprulefile(force) {
         bestJs = rulejs;
         bestJson = rulejson;
       }
+      if (bestNum >= minNeed) break;
     }
   }
   if (bestJs && bestJson) {
@@ -168,7 +169,8 @@ function attachUpdateButton() {
         if (res && res.data) {
           var has = false;
           for (var i = 0; i < res.data.length; i++) {
-            if (res.data[i].title == "¸üÐÂ¹æÔò") {
+            var tt = String((res.data[i] && res.data[i].title) || "");
+            if (tt.indexOf("检查更新") >= 0 || tt.indexOf("海阔世界") >= 0 || tt.indexOf(RULE_VER) >= 0) {
               has = true;
               break;
             }

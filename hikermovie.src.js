@@ -1,15 +1,15 @@
 ﻿// hikermovie v22 — 动漫 + 影视多站，海阔 lazyRule 播放
 // RULE_VER 必须单独 var：旧更新器正则是 /var\s+RULE_VER=/，join_vars 后会读不到版本
-var RULE_VER = 'v22-anime54';
+var RULE_VER = 'v22-anime55';
 var RULE_JSON = 'hiker://files/rules/hksj/hikermovie.json';
 var RULE_JS_MAX = 70000;
 // 不用 jsDelivr @main：CDN 会缓存旧版（曾把 67KB 老规则盖掉 25KB 新规则）
 var RULE_BASES = [
-    'http://192.168.3.222:8765/',
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/main/',
     'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/',
     'https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
-    'https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/'
+    'https://ghfast.top/https://raw.githubusercontent.com/wangjiewangjie/VastWorld/main/',
+    'http://192.168.3.222:8765/'
 ];
 var COOKIE_DIR = 'hiker://files/rules/hksj/hksjcookie/';
 var SITE_ICO = 'https://gitee.com/jiewangjiewang/the-vast-world-of-the-sea/raw/master/icons/site.jpg?v=3';
@@ -528,7 +528,7 @@ function pushCards(d, list, host, col) {
         var v = list[i];
         d.push({
             title: v.title,
-            desc: v.desc ? themeOrange(v.desc) : '',
+            desc: v.desc || '',
             pic_url: v.img ? imgUrl(v.img, host) : '',
             // 必须用 empty：$(http详情).rule 在部分机型会直接打开原网页而不是进二级
             url: $('hiker://empty#noHistory#').rule((name, detailUrl) => {
@@ -1248,7 +1248,6 @@ function animeNum(ver) {
 
 function tryUpdateFrom(bases, ver) {
     var dir = 'hiker://files/rules/hksj/';
-    var opt = { headers: { 'User-Agent': MOBILE_UA, 'Cache-Control': 'no-cache', Pragma: 'no-cache' }, timeout: 8000 };
     var logs = [];
     var want = animeNum(ver);
     var localNum = 0;
@@ -1259,6 +1258,10 @@ function tryUpdateFrom(bases, ver) {
     var bad = String.fromCharCode(119, 119, 103, 122, 46, 99, 110);
     for (var i = 0; i < bases.length; i++) {
         try {
+            var isLan = bases[i].indexOf('192.168.') >= 0;
+            var isGitee = bases[i].indexOf('gitee') >= 0;
+            var to = isLan ? 1200 : (isGitee ? 8000 : 4000);
+            var opt = { headers: { 'User-Agent': MOBILE_UA, 'Cache-Control': 'no-cache', Pragma: 'no-cache' }, timeout: to };
             var js = fetch(bases[i] + 'hikermovie.js?t=' + Date.now(), opt) || '';
             var jn = fetch(bases[i] + 'hikermovie.json?t=' + Date.now(), opt) || '';
             if (js.substring(0, 5) == 'error') js = '';
@@ -1267,21 +1270,24 @@ function tryUpdateFrom(bases, ver) {
             var rn = animeNum(remoteVer);
             var jsOk = js && remoteVer && rn >= minNeed && js.indexOf('pageNum') >= 0 && js.length < RULE_JS_MAX && js.indexOf(bad) < 0;
             var jnOk = jn && jn.indexOf('vodhref') >= 0;
-            var tag = bases[i].indexOf('192.168.') >= 0 ? 'lan' : (bases[i].indexOf('gitee') >= 0 ? 'gitee' : (bases[i].indexOf('ghfast') >= 0 ? 'ghfast' : 'gh'));
+            var tag = isLan ? 'lan' : (isGitee ? 'gitee' : (bases[i].indexOf('ghfast') >= 0 ? 'ghfast' : 'gh'));
             logs.push(tag + ':' + (js ? js.length : 0) + '/' + (remoteVer || '-') + (jsOk ? '+js' : '') + (jnOk ? '+json' : ''));
             if (!jsOk || !jnOk) continue;
             if (!best || rn > best.num) best = { js: js, jn: jn, ver: remoteVer, num: rn, tag: tag };
+            // Gitee 已拿到够用的版本就停，避免再去撞 GitHub
+            if (best && best.num >= minNeed && (isGitee || best.num > localNum)) break;
         } catch (e) {
             logs.push('err');
         }
     }
     if (!best) return 'toast://暂时没有可用更新，请稍后再试';
+    if (best.num <= localNum) return 'toast://已是最新 ' + (parseRuleVer(fetch(dir + 'hikermovie.js') || '') || ver);
     writeFile(dir + 'hikermovie.js', best.js);
     writeFile(dir + 'hikermovie.json', best.jn);
     var check = parseRuleVer(fetch(dir + 'hikermovie.js') || '');
     if (animeNum(check) < best.num) return 'toast://更新未完成，请重试';
     refreshPage(false);
-    return 'toast://已更新到 ' + best.ver;
+    return 'toast://已更新到 ' + best.ver + ' · ' + best.tag;
 }
 
 // ---------- 首页 ----------
@@ -2070,7 +2076,7 @@ function hikseaerji(cktitle, key, wd, searchUrl) {
             } else {
                 for (var i = 0; i < list.length; i++) {
                     var v = list[i];
-                    var show = wd ? v.title.replace(wd, themeOrange(wd)) : v.title;
+                    var show = wd ? v.title.replace(wd, '「' + wd + '」') : v.title;
                     d.push({
                         title: show + (v.desc ? ' ' + v.desc : ''),
                         pic_url: v.img ? imgUrl(v.img, host) : '',
